@@ -67,6 +67,24 @@ Give each one only:
 After they return, verify each expected `findings-*.md` exists. A missing file means that axis
 failed — say so in the final report rather than pretending the axis passed.
 
+書き込みが拒否された場合、レビュアーは本文を**返り値として返す**。その場合はオーケストレータが
+逐語のまま所定パスに保存する。内容には手を入れない（要約も加筆もしない）。
+
+**そして `reviewer-tests` が返った直後に、もう一度 `git status --porcelain` を確認する。**
+
+```bash
+git status --porcelain    # 空でなければ変異が復元されていない
+git diff                  # 何が残っているか見る
+```
+
+空でなければ `git checkout -- <path>` で戻し、**その事実を最終報告に書く**（復元漏れが起きたこと
+自体が `reviewer-tests` のプロンプトの欠陥を示すデータ）。
+
+このチェックを省いてはいけない。復元の担保は `reviewer-tests` の自己申告 1 行しか無く、**復元に
+失敗した当人が書く申告**なので検証になっていない。しかも変異検証が finding にするのは定義上
+「テストが落ちない変異」＝ `make check` を緑で通り抜ける変異なので、Stage 6 の `make check` も
+防波堤にならず、`git add -A` がそのままコミットに吸収する。
+
 ### Stage 3 — Verify
 
 Collect every finding block from the findings files. Select which to verify per the routing decision
@@ -107,6 +125,14 @@ Otherwise continue to Stage 6.
 
 Conditions 3 and 4 are **not success**. Report them as unresolved. Do not describe the run as
 complete when findings remain open.
+
+**どの条件で抜けても、抜ける前に Stage 6 の決着だけは必ず行う。** 上限・停滞で抜けるときは修正を
+適用しない（もう直さないと決めた回だから）が、残っている BLOCKER/MAJOR を `unresolved` として
+`ledger.md` に記録し、`make check` とコミットは飛ばす。
+
+これを省くと、**最も決着の記録が要る回**——直しきれずに止まった回——だけ `ledger.md` が空になる。
+CLAUDE.md の「決着は `.review/<slug>/ledger.md` に残る」と最終報告の「却下した指摘と理由」が
+そこで破れる。`ledger.md` の outcome は `fixed` / `rejected` / `unresolved` の 3 つ。
 
 ### Stage 6 — Fix (you do this yourself)
 

@@ -111,11 +111,16 @@ That itself is a finding the reviewers should know about.
 
 Decide, from the tags and size:
 
-| 条件 | ルーティング |
-| --- | --- |
-| `docs` のみ、または合計 20 行未満 | `reviewer-contract` の 1 枚のみ。verify なし。ループなし |
-| 上記以外 | 3 軸すべて。verify は BLOCKER/MAJOR のみ |
-| `migration` または `auth` タグあり | 3 軸すべて。**全 finding を verify**。最終報告に「人間レビュー必須」 |
+**上から順に評価し、最初に一致したものを採る。** 条件は排他ではないので、この優先順位が無いと
+3 行の migration 編集が縮退ルートに落ちる（最も厳しく見るべき変更が最も緩いルートを引く）。
+
+| # | 条件 | ルーティング |
+| --- | --- | --- |
+| 1 | `migration` または `auth` タグあり | 3 軸すべて。**全 finding を verify**。ループあり。最終報告に「人間レビュー必須」 |
+| 2 | `docs` のみ、または合計 20 行未満 | `reviewer-contract` の 1 枚のみ。verify なし。**ループなし** |
+| 3 | 上記以外 | 3 軸すべて。verify は BLOCKER/MAJOR のみ。ループあり |
+
+行数は条件 1 を上書きしない。**`migration` / `auth` に該当する変更は、1 行でもフルルート。**
 
 The reduced route exists so trivial changes do not cost 15 agent runs. Use it when it applies —
 being thorough on a typo fix is how this harness stops being used.
@@ -124,8 +129,9 @@ being thorough on a typo fix is how this harness stops being used.
 
 ## Step 5 — Write the artifacts
 
-Two files, under `.review/<branch>/` with `/` in the branch name replaced by `-`. Create the
-directory if needed.
+Two files, under `.review/<slug>/`. **`<slug>` = ブランチ名の `/` を `-` に置換したもの**
+（`feat/review-harness` → `feat-review-harness`）。ハーネス全体でこの 1 つの綴りだけを使う。
+Create the directory if needed.
 
 **`diff.patch`** — the raw output of `git diff main...HEAD`, unmodified.
 `reviewer-correctness` has no Bash access and reads the change from this file; if you skip it, that
@@ -150,7 +156,7 @@ reviewer is blind.
 | --- | --- | --- |
 
 ## 差分
-`.review/<branch>/diff.patch` に全文がある。
+`.review/<slug>/diff.patch` に全文がある。
 
 ## リスクタグ
 <タグの列挙。無ければ「なし」>
@@ -164,6 +170,7 @@ reviewer is blind.
 ## ルーティング決定
 - 実行するレビュアー: <列挙>
 - verify 対象: <全件 / BLOCKER・MAJOR のみ / なし>
+- ループ: <あり / なし>
 - 人間レビュー必須: <はい / いいえ>
 - 理由: <1 文>
 
@@ -171,7 +178,7 @@ reviewer is blind.
 <ledger.md の rejected エントリをそのまま転記。無ければこの節ごと省略>
 ```
 
-If `.review/<branch>/ledger.md` exists and contains `rejected` entries, copy them into the last
+If `.review/<slug>/ledger.md` exists and contains `rejected` entries, copy them into the last
 section verbatim. Reviewers are told to re-raise those only with new evidence.
 
 ---

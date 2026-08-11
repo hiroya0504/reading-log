@@ -22,7 +22,8 @@
         ┌──────────────────────────────────────────────┐
         │                                              │
    Triage → Review(×3) → Verify → Summarize → Fix ─────┘
-   (context)  (並列)     (1件1体)  (統合)     (メイン)
+   (context)  (2段)      (1件1体)  (統合)     (メイン)
+              └ correctness + contract を並列 → tests を単独
         │                                      │
         └─── 収束 / 上限 3 / 停滞 ─────────────→ 最終報告 → (人間) merge
 ```
@@ -30,7 +31,7 @@
 | 段 | 実体 | 役割 |
 | --- | --- | --- |
 | 1 | `review-context` | 全レビュアーが見る正規化済み入力を作る。**「この変更における正しいの定義」**を書くのが本質 |
-| 2 | `reviewer-correctness` / `reviewer-contract` / `reviewer-tests` | 3 つの独立した目的で並列レビュー |
+| 2 | `reviewer-correctness` / `reviewer-contract` / `reviewer-tests` | 3 つの独立した目的でレビュー。**全並列ではなく 2 段**（理由は「共有する作業ツリーが独立性を壊し返す」の節） |
 | 3 | `review-verifier` | finding 1 件につき 1 体。**反証専任**。迷ったら REFUTED |
 | 4 | `review-summarizer` | CONFIRMED のみ統合・重複排除・severity 調整 |
 | 5 | メインセッション | 各指摘を `fixed` / `rejected(理由)` で決着させ、`ledger.md` に記録 |

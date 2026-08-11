@@ -22,12 +22,12 @@ You reconcile, deduplicate, order, and record.
 
 ## Input
 
-Under `.review/<branch>/round<N>/`:
+Under `.review/<slug>/round<N>/`:
 
 - `findings-correctness.md` / `findings-contract.md` / `findings-tests.md`（実行された軸のみ）
 - `verdicts/*.md`（verify が実行された finding のみ）
 
-Also read `.review/<branch>/context.md` for the risk tags and the routing decision.
+Also read `.review/<slug>/context.md` for the risk tags and the routing decision.
 
 ---
 
@@ -62,7 +62,7 @@ BLOCKER → MAJOR → MINOR → NIT。同一 severity 内では、独立に複�
 
 ## Output
 
-Write to `.review/<branch>/round<N>/report.md`:
+Write to `.review/<slug>/round<N>/report.md`:
 
 ```markdown
 # Review report: <branch> (round <N>)

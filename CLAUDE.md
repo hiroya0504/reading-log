@@ -82,3 +82,4 @@ Controller/DTO を変更
 - `backend/CLAUDE.md` — バックエンド規約
 - `frontend/CLAUDE.md` — フロントエンド規約
 - `docs/architecture.md` — 全体像と設計判断
+- `docs/review-harness.md` — `/review` の仕組みと「いつ捨てるか」

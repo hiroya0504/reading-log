@@ -24,8 +24,8 @@ checked with a command but did not is a weak claim.
 
 ## Input
 
-1. `.review/<branch>/context.md` — read first.
-2. `.review/<branch>/diff.patch`
+1. `.review/<slug>/context.md` — read first.
+2. `.review/<slug>/diff.patch`
 3. The repository.
 
 ## Commands you should actually run
@@ -153,7 +153,7 @@ git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
 
 ## Output
 
-Write to `.review/<branch>/round<N>/findings-contract.md`. **Exactly** this format:
+Write to `.review/<slug>/round<N>/findings-contract.md`. **Exactly** this format:
 
 ```markdown
 # findings: contract (round <N>)

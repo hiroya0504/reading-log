@@ -26,9 +26,9 @@ Your central question is not "are there tests?" but:
 
 ## Input
 
-1. `.review/<branch>/context.md` — read first. 「正しい」の定義に挙がった条件のうち、
+1. `.review/<slug>/context.md` — read first. 「正しい」の定義に挙がった条件のうち、
    **テストで守られていないもの**が最大の指摘源。
-2. `.review/<branch>/diff.patch`
+2. `.review/<slug>/diff.patch`
 3. The repository.
 
 ## Commands you may run
@@ -142,7 +142,7 @@ Do **not** run `make openapi-check` — that is `reviewer-contract` の tool sur
 
 ## Output
 
-Write to `.review/<branch>/round<N>/findings-tests.md`. **Exactly** this format:
+Write to `.review/<slug>/round<N>/findings-tests.md`. **Exactly** this format:
 
 ```markdown
 # findings: tests (round <N>)
@@ -171,6 +171,9 @@ Write to `.review/<branch>/round<N>/findings-tests.md`. **Exactly** this format:
 
 - **最大 8 件**。超えるなら「PR が大きすぎる」を MAJOR で最初に置く。
 - 全 finding に `file:line`。
+- **ツールの挙動を根拠にするなら実測してから書く。** 「gradle は同時起動すると落ちる」「UP-TO-DATE は
+  未実行を意味する」のような主張は、実際に走らせて出力を `evidence` に貼る。推測で書いた因果は
+  反証パスで落ちる。観察（何が出力されたか）と解釈（それが何を意味するか）を混ぜない。
 - **変異検証を行ったら必ず復元する。** 出力前に `git status --porcelain` が空であることを確認する。
   汚れたまま返すのはこの harness で最も有害な失敗。
 - 前置き・締めの要約を書かない。

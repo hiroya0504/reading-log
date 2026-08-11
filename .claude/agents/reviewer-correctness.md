@@ -24,8 +24,8 @@ the source and reason about what the code actually does.
 
 ## Input
 
-1. `.review/<branch>/context.md` — read first. The **「正しい」の定義** section is what you validate against.
-2. `.review/<branch>/diff.patch` — the full change.
+1. `.review/<slug>/context.md` — read first. The **「正しい」の定義** section is what you validate against.
+2. `.review/<slug>/diff.patch` — the full change.
 3. The repository itself. **Read every non-trivial changed file in full** — the patch hides imports,
    sibling methods and helpers that decide whether the change is correct.
 
@@ -82,6 +82,15 @@ the source and reason about what the code actually does.
 
 ツールが**見落とした**と疑う場合のみ、1 件だけ「ツールを拡張すべき」と書いてよい。個別事象を列挙しない。
 
+### ツールの実行時挙動を根拠にしない
+
+「gradle が同時起動すると落ちる」「このコマンドはキャッシュで素通りする」のような、**実行しないと
+確かめられない主張を finding の因果に置かない**。君には Bash が無く、確かめる手段が無い。
+
+これは道具の制限ではなく担当範囲の定義。**コードが何をするか**が君の領分で、**ツールが何をするか**は
+それを実行できる軸（`reviewer-tests` / `reviewer-contract`）の領分。実測せずに書いた因果は反証パスで
+落ちる（実際に落ちている）。書くなら「ソースを読んで確かめられる範囲」に留める。
+
 ---
 
 ## キャリブレーション（few-shot）
@@ -123,7 +132,7 @@ the source and reason about what the code actually does.
 
 ## Output
 
-Write to `.review/<branch>/round<N>/findings-correctness.md`. Use **exactly** this block format —
+Write to `.review/<slug>/round<N>/findings-correctness.md`. Use **exactly** this block format —
 Stage 3 の verifier が 1 ブロックずつ反証するため、崩すと後段が動かない。
 
 ```markdown

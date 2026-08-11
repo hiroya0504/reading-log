@@ -40,8 +40,9 @@ the finding is wrong until the repository proves otherwise.**
 ## Input
 
 - The finding block (severity / location / claim / why / evidence)
-- The finding id and the round number `<N>` — 出力先の決定に使う
-- `.review/<branch>/context.md` — 特に「正しい」の定義
+- The finding id, the branch slug and the round number `<N>` — 出力先の決定に使う
+  （`<slug>` = ブランチ名の `/` を `-` に置換したもの）
+- `.review/<slug>/context.md` — 特に「正しい」の定義
 - The repository
 
 ---
@@ -108,7 +109,7 @@ Try these, in order. Stop as soon as one succeeds.
 
 ## Output
 
-Write to `.review/<branch>/round<N>/verdicts/<finding-id>.md` and return the same content:
+Write to `.review/<slug>/round<N>/verdicts/<finding-id>.md` and return the same content:
 
 ```markdown
 # <finding-id>: <CONFIRMED | REFUTED>
