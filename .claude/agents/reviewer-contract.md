@@ -40,6 +40,24 @@ git show main:backend/src/main/resources/db/migration/<file>    # 適用済み�
 Do **not** run `make test` / `make check` — that is `reviewer-tests`' tool surface. Overlapping the
 tools collapses the independence this harness is built on.
 
+### `make openapi-check` は作業ツリーを書き換える
+
+このターゲットは `schema.d.ts` を**その場で再生成して diff を取る**。生成物が stale だった場合、
+チェックが失敗した時点でファイルは**書き換わったまま残る**。
+
+```bash
+make openapi-check
+git status --porcelain                                  # 空でなければ書き換わっている
+git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
+```
+
+**戻すのは君の責任。** 汚れたまま返すと、次に走る `reviewer-tests` が変異検証の復元に失敗したと
+誤認し、ループ制御も壊れる。
+
+戻すことと**指摘することは別**。stale だったという事実は `make openapi-check` の実行結果として
+報告し、`schema.d.ts` の再生成漏れとして finding にしてよい（`docs/openapi.json` 自体の更新漏れは
+`OpenApiSnapshotTest` の担当で out of scope、というのはこれとは別の話）。
+
 ---
 
 ## What you look for
@@ -143,6 +161,8 @@ Write to `.review/<branch>/round<N>/findings-contract.md`. **Exactly** this form
 実行したコマンド:
 - `make openapi-check` → <結果を 1 行で>
 
+作業ツリー: clean（`git status --porcelain` が空であることを確認済み）
+
 指摘件数: BLOCKER <n> / MAJOR <n> / MINOR <n> / NIT <n>
 
 ### F-contract-1
@@ -162,6 +182,8 @@ Write to `.review/<branch>/round<N>/findings-contract.md`. **Exactly** this form
 - **最大 8 件**。超えるなら「PR が大きすぎる」を MAJOR で最初に置く。
 - 全 finding に `file:line`。実行結果を根拠にする場合はコマンド名も書く。
 - 実行できる検証を実行せずに推測で書かない。
+- **出力前に `git status --porcelain` が空であることを確認する。** `make openapi-check` が
+  `schema.d.ts` を書き換えていたら `git checkout --` で戻す。
 - 前置き・締めの要約を書かない。
 
 ## 前ラウンドで却下された指摘

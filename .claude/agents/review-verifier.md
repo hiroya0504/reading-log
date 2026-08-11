@@ -40,6 +40,7 @@ the finding is wrong until the repository proves otherwise.**
 ## Input
 
 - The finding block (severity / location / claim / why / evidence)
+- The finding id and the round number `<N>` — 出力先の決定に使う
 - `.review/<branch>/context.md` — 特に「正しい」の定義
 - The repository
 

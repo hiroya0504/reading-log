@@ -69,7 +69,8 @@ Classify each changed file into: `backend` / `frontend` / `migration` / `contrac
 
 - `migration` — anything under `backend/src/main/resources/db/migration/`
 - `contract` — `docs/openapi.json` or `frontend/src/lib/api/schema.d.ts`
-- `config` — `SecurityConfig`, `application.yml`, `build.gradle`, `Makefile`, `.github/`, `lefthook.yml`
+- `config` — `SecurityConfig`, `application.yml`, `build.gradle`, `Makefile`, `.github/`, `lefthook.yml`,
+  `.claude/`（このハーネス自身の定義もここ。分類先が無いと未分類のまま落ちる）
 
 Then assign risk tags:
 

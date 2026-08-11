@@ -40,11 +40,29 @@ rest of the round — do not override it because you think the change deserves m
 
 ### Stage 2 — Review
 
-Spawn the reviewers the routing decision names, **in parallel** (one message, multiple Agent calls).
+レビュアーは**全並列にはできない**。3 軸は同じ作業ツリーを共有しており、そのうち 2 軸が書き込む。
+
+- `reviewer-tests` は変異検証で実装を一時的に壊す
+- `reviewer-contract` の `make openapi-check` は `schema.d.ts` を**その場で再生成する**（stale なら
+  ファイルが書き換わったまま残る）
+
+全部同時に走らせると、`reviewer-correctness` が変異中のコードを読んで幻の BLOCKER を出し、
+`reviewer-tests` の最終 `git status --porcelain` チェックが他人の書き込みで汚れて復元失敗と誤認し、
+gradle が同時起動して落ちる。**独立性を作る仕組みが、共有ツリー越しに依存を作り返している。**
+
+したがって 2 段に分ける（routing が名指しした軸だけ、以下の順で）:
+
+1. `reviewer-correctness` と `reviewer-contract` を**並列**（一度に複数 Agent 呼び出し）
+2. **返ってきてから** `reviewer-tests` を単独で
+
 Give each one only:
 
 > Review the current branch. Read `.review/<slug>/context.md` and `.review/<slug>/diff.patch` first.
 > Write your findings to `.review/<slug>/round<N>/findings-<axis>.md`. This is round `<N>`.
+
+段 1 が返ったら、段 2 に進む前に `git status --porcelain` を自分で確認する。空でなければ
+`reviewer-contract` が `schema.d.ts` を再生成したまま返している。`git checkout --` で戻してから
+`reviewer-tests` を出す（汚れたツリーで変異検証を始めると復元先が壊れる）。
 
 After they return, verify each expected `findings-*.md` exists. A missing file means that axis
 failed — say so in the final report rather than pretending the axis passed.
@@ -55,11 +73,12 @@ Collect every finding block from the findings files. Select which to verify per 
 (all findings, or BLOCKER+MAJOR only, or none).
 
 Spawn one `review-verifier` **per finding**, in parallel, passing the finding block verbatim plus
-its id and the branch slug. Do not pass the other findings — each verdict must be independent.
+its id, the branch slug and the round number `<N>` (it writes to `round<N>/verdicts/`). Do not pass
+the other findings — each verdict must be independent.
 
 If a round has more than 12 findings to verify, verify the BLOCKER and MAJOR ones first and note in
 the report that the rest were not verified. **Say what was skipped**; silent truncation reads as
-"everything was checked".
+"everything was checked". Keep the list of skipped findings — Stage 5 counts them.
 
 ### Stage 4 — Summarize
 
@@ -71,15 +90,22 @@ Read the report yourself.
 
 ### Stage 5 — Stop conditions
 
+未解決 BLOCKER+MAJOR の件数は `report.md` の数字だけで数えない。**report.md の未解決 + Stage 3 で
+verify を打ち切った BLOCKER/MAJOR + report.md の「検証欠落」に載った BLOCKER/MAJOR** の合計。
+`report.md` は verdict の無い finding を採用しないので、この足し戻しをしないと「verify を省いた
+BLOCKER が 1 件あるのに収束」と誤報する。
+
 Evaluate in this order:
 
-1. **収束** — 未解決 BLOCKER = 0 かつ MAJOR = 0 → exit loop, converged
-2. **上限** — `N == MAX_ROUNDS` → exit loop, **unresolved**
-3. **停滞** — 未解決 BLOCKER+MAJOR の件数が前ラウンドから減っていない → exit loop, **unresolved**
+1. **縮退ルート** — routing decision が「ループなし」なら、Stage 6 の決着だけ行って exit loop。
+   未解決が残るならそれは **unresolved** として報告する
+2. **収束** — 未解決 BLOCKER = 0 かつ MAJOR = 0 → exit loop, converged
+3. **上限** — `N == MAX_ROUNDS` → exit loop, **unresolved**
+4. **停滞** — 未解決 BLOCKER+MAJOR の件数が前ラウンドから減っていない → exit loop, **unresolved**
 
 Otherwise continue to Stage 6.
 
-Conditions 2 and 3 are **not success**. Report them as unresolved. Do not describe the run as
+Conditions 3 and 4 are **not success**. Report them as unresolved. Do not describe the run as
 complete when findings remain open.
 
 ### Stage 6 — Fix (you do this yourself)
@@ -110,6 +136,22 @@ resets.
 
 Then run `make check`. It must be green before the next round. If your fixes broke it, fix that
 too — re-reviewing a red tree wastes a full round.
+
+**そのあとコミットする。** `make check` が緑になってから、修正を 1 コミットにまとめる:
+
+```bash
+git add -A && git commit -m "fix(review): round <N> の指摘に対応"
+```
+
+これは任意の後片付けではなく**ループの前提条件**。Stage 1 の `review-context` は preflight で
+`git status --porcelain` が空であることを要求する。修正を未コミットのまま Stage 1 に戻ると
+ラウンド 2 は必ず `PREFLIGHT FAILED` で死に、**ループが 1 周も回らない**。
+
+`make check` の**後に**コミットすること。`make check` は `openapi-check` 経由で `schema.d.ts` を
+再生成するので、先にコミットすると再生成分が漏れる。
+
+コミットは `main...HEAD` に含まれるので、次ラウンドのレビュアーは修正後のコードを見る。これは正しい
+（修正そのものが次ラウンドのレビュー対象になる）。ブランチ上のコミットなので `main` には触れない。
 
 Increment `N` and go back to Stage 1.
 
