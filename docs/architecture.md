@@ -62,6 +62,22 @@ FE/BE を往復する開発でズレを機械的に検出するための仕組�
 - 各ステップは `make` を呼ぶ。**コマンドの正は Makefile 一本**で、CI との二重管理をしない。
 - `concurrency` で古いジョブをキャンセル、`permissions: contents: read` で GITHUB_TOKEN を最小権限に。
 
+### ブランチ保護
+
+classic branch protection ではなく **repository ruleset**（名前 `main`）で設定している。
+
+- 対象: `refs/heads/main`
+- ルール: PR 必須 / 必須ステータスチェック `backend`・`frontend` / ブランチ削除禁止 / force push 禁止
+- bypass actor なし（管理者も迂回できない）
+
+確認コマンド:
+
+```bash
+gh api repos/<owner>/reading-log/rules/branches/main --jq '.[].type'
+```
+
+**空配列が返ったら保護は効いていない。** ruleset が `active` でも `conditions.ref_name.include` が空だと対象ブランチがゼロ件になり、設定画面上は正しく見えるのに何も保護されない状態になる。ruleset の存在ではなく、このエンドポイントの出力で判断すること。
+
 ## MVP のマイルストーン
 
 | M | 内容 |
