@@ -1,0 +1,28 @@
+# Formatting only, on purpose. Linting and tests belong to `make check` and CI; running them on
+# every commit slows the edit loop down enough that people start passing --no-verify, which is
+# worse than not having the hook.
+#
+# Installed by `make setup` (which runs `lefthook install`). A lefthook.yml that was never
+# installed is a hook that never runs — check `.git/hooks/pre-commit` exists if in doubt.
+pre-commit:
+  parallel: true
+  commands:
+    backend-format:
+      root: "backend/"
+      glob: "*.java"
+      # Formats the whole source set rather than the staged files. Spotless' -PspotlessFiles
+      # takes a comma-separated list of regexes, so handing it lefthook's space-separated paths
+      # makes Gradle read them as task names and the hook fails. A full pass costs a couple of
+      # seconds on a project this size; correctness is worth more than that here.
+      run: ./gradlew spotlessApply
+      stage_fixed: true
+    frontend-eslint:
+      root: "frontend/"
+      glob: "*.{ts,tsx,js,jsx,mjs}"
+      run: pnpm eslint --fix {staged_files}
+      stage_fixed: true
+    frontend-prettier:
+      root: "frontend/"
+      glob: "*.{ts,tsx,js,jsx,mjs,json,css,md}"
+      run: pnpm prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true

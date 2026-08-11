@@ -1,0 +1,8 @@
+{
+  "name": "reading-log",
+  "private": true,
+  "description": "Repository-root tooling only. The application lives in backend/ and frontend/.",
+  "devDependencies": {
+    "lefthook": "^1.10.0"
+  }
+}

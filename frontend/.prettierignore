@@ -1,0 +1,9 @@
+.next
+node_modules
+coverage
+pnpm-lock.yaml
+public
+
+# Generated from docs/openapi.json by `make openapi`. Formatting it here would mean the
+# contract-freshness check depends on Prettier's output as well as the generator's.
+src/lib/api/schema.d.ts

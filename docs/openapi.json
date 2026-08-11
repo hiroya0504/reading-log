@@ -1,0 +1,54 @@
+{
+  "components" : {
+    "securitySchemes" : {
+      "basicAuth" : {
+        "scheme" : "basic",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "読んだ本を記録する個人用アプリの API。",
+    "title" : "reading-log API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/health" : {
+      "get" : {
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "additionalProperties" : {
+                    "type" : "string"
+                  },
+                  "type" : "object"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Liveness probe. Open to unauthenticated callers.",
+        "tags" : [
+          "health"
+        ]
+      }
+    }
+  },
+  "security" : [
+    {
+      "basicAuth" : [ ]
+    }
+  ],
+  "servers" : [
+    {
+      "description" : "Relative to the deployment host",
+      "url" : "/"
+    }
+  ]
+}

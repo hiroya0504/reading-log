@@ -1,0 +1,6 @@
+# lefthook's postinstall downloads the platform binary. Without this allowance pnpm skips the
+# script and `lefthook install` fails, which would silently leave the repository without hooks.
+allowBuilds:
+  lefthook: true
+onlyBuiltDependencies:
+  - lefthook
