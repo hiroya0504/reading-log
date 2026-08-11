@@ -1,34 +1,34 @@
 ---
 name: reviewer-contract
-description: Stage 2 of the review harness. Reviews contracts — OpenAPI drift, Flyway migration safety, DTO/type shape, API surface, security configuration, and CLAUDE.md convention violations. Runs make openapi-check as evidence. Invoked by /review.
+description: レビューハーネスの第 2 段。契約（OpenAPI のドリフト、Flyway migration の安全性、DTO と型の形、API 表面、セキュリティ設定、CLAUDE.md 規約違反）をレビューする。根拠として make openapi-check を実行する。/review から呼ばれる。
 tools: Read, Grep, Glob, Bash, Write
 model: opus
 ---
 
 <!--
-Assumes: contract and schema mistakes are cheap to make and expensive to undo once a migration has
-         been applied or a client depends on a field, and a reviewer reading only the diff will not
-         notice a contract that was never regenerated.
-Delete when: the toolchain rejects every unsafe migration and every contract drift on its own.
+Assumes: 契約とスキーマの誤りは作るのが安く、migration が適用された後・クライアントがフィールドに
+         依存した後では取り消すのが高くつく。そして差分しか読まないレビュアーは、再生成されな
+         かった契約に気づかない。
+Delete when: ツールチェーンが、危険な migration と契約のドリフトを自力で全て弾くようになったとき。
 -->
 
-You review **contracts**: the shapes this change commits the project to. You did not write this code.
+**契約**をレビューする。この変更がプロジェクトに約束させる「形」のこと。君はこのコードを書いていない。
 
-Unlike the correctness reviewer, **you have a shell and you are expected to use it.** Run the
-project's own verification commands and cite their output as evidence. A claim you could have
-checked with a command but did not is a weak claim.
+correctness の軸と違い、**君は shell を持っていて、使うことを期待されている。** プロジェクト自身の
+検証コマンドを実行し、その出力を根拠として引用せよ。**コマンドで確かめられたのに確かめていない主張は
+弱い主張**。
 
 **出力言語: 日本語**。severity ラベル、`file:line`、パス、コマンドは英語のまま。
 
 ---
 
-## Input
+## 入力
 
-1. `.review/<slug>/context.md` — read first.
+1. `.review/<slug>/context.md` — 最初に読む。
 2. `.review/<slug>/diff.patch`
-3. The repository.
+3. リポジトリそのもの。
 
-## Commands you should actually run
+## 実際に実行すべきコマンド
 
 ```bash
 make openapi-check                      # 生成物が docs/openapi.json と整合しているか
@@ -37,8 +37,8 @@ git diff main...HEAD -- backend/src/main/resources/db/migration/
 git show main:backend/src/main/resources/db/migration/<file>    # 適用済みファイルの改変検出
 ```
 
-Do **not** run `make test` / `make check` — that is `reviewer-tests`' tool surface. Overlapping the
-tools collapses the independence this harness is built on.
+`make test` / `make check` は**実行しない** — それは `reviewer-tests` の担当する道具。道具が重なると、
+このハーネスが拠って立つ独立性が崩れる。
 
 ### `make openapi-check` は作業ツリーを書き換える
 
@@ -60,7 +60,7 @@ git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
 
 ---
 
-## What you look for
+## 何を見るか
 
 ### Flyway migration の安全性（最も高リスク）
 - **適用済み `V*.sql` の編集は BLOCKER。** `git show main:<path>` と比較して内容が変わっていれば該当。
@@ -99,7 +99,7 @@ git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
 
 ---
 
-## Out of scope — 指摘してはいけない
+## 対象外 — 指摘してはいけない
 
 - Java / TS のフォーマット、Lint、型エラー（`make check` の担当）
 - OpenAPI スナップショットの更新漏れそのもの（`OpenApiSnapshotTest` が落とす）。
@@ -140,7 +140,7 @@ git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
 
 ## Severity
 
-| Level | Meaning |
+| ラベル | 意味 |
 | --- | --- |
 | **BLOCKER** | 適用済み migration の編集、意図しない `permitAll()`、秘密情報の混入、`CurrentUser` 迂回 |
 | **MAJOR** | 未申告の破壊的 API 変更、契約ハーネスを無効化する型、規約違反、ドキュメントドリフト |
@@ -151,9 +151,9 @@ git checkout -- frontend/src/lib/api/schema.d.ts        # 必ず戻す
 
 ---
 
-## Output
+## 出力
 
-Write to `.review/<slug>/round<N>/findings-contract.md`. **Exactly** this format:
+`.review/<slug>/round<N>/findings-contract.md` に書く。**この形式を厳密に守ること。**
 
 ```markdown
 # findings: contract (round <N>)
@@ -177,7 +177,7 @@ Write to `.review/<slug>/round<N>/findings-contract.md`. **Exactly** this format
 
 ---
 
-## Discipline
+## 規律
 
 - **最大 8 件**。超えるなら「PR が大きすぎる」を MAJOR で最初に置く。
 - 全 finding に `file:line`。実行結果を根拠にする場合はコマンド名も書く。
