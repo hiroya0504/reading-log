@@ -1,5 +1,17 @@
 {
   "components" : {
+    "schemas" : {
+      "HealthResponse" : {
+        "properties" : {
+          "status" : {
+            "description" : "Always \"ok\".",
+            "example" : "ok",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
     "securitySchemes" : {
       "basicAuth" : {
         "scheme" : "basic",
@@ -22,10 +34,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "additionalProperties" : {
-                    "type" : "string"
-                  },
-                  "type" : "object"
+                  "$ref" : "#/components/schemas/HealthResponse"
                 }
               }
             },

@@ -7,7 +7,7 @@
 # The single source of truth for every command in this repository. CI calls these targets rather
 # than repeating the underlying tool invocations, so `make check` and CI cannot drift apart.
 
-OPENAPI_ARTIFACTS := docs/openapi.json frontend/src/lib/api/schema.d.ts
+SCHEMA_TYPES := frontend/src/lib/api/schema.d.ts
 
 # --- Setup ---
 
@@ -83,20 +83,30 @@ openapi: ## Regenerate the API contract and the frontend types from it
 	@echo "==> Regenerating frontend/src/lib/api/schema.d.ts"
 	cd frontend && pnpm gen:api
 
-openapi-check: ## Fail if the committed contract artifacts are stale
-	@# The backend half is covered by OpenApiSnapshotTest during `make test`: it fails when the
-	@# code no longer matches docs/openapi.json. What is left to verify is that the generated
-	@# frontend types were regenerated and committed alongside it.
-	cd frontend && pnpm gen:api
-	@if [ -n "$$(git status --porcelain -- $(OPENAPI_ARTIFACTS))" ]; then \
+openapi-check: ## Fail if the generated frontend types are stale relative to docs/openapi.json
+	@# Two halves of the contract are verified in two places:
+	@#   docs/openapi.json  vs the backend code  -> OpenApiSnapshotTest, during `make test`
+	@#   schema.d.ts        vs docs/openapi.json -> here
+	@#
+	@# Deliberately not a `git status` check. Right after `make openapi` the artifacts are correct
+	@# but not yet committed, and a working-tree check would report that as a failure. Comparing
+	@# the regenerated output against the file on disk answers the question that actually matters:
+	@# does regenerating change anything? Whether the result was committed is enforced by CI,
+	@# which only ever sees committed code.
+	@before=$$(mktemp); \
+	cp $(SCHEMA_TYPES) "$$before" 2>/dev/null || : ; \
+	( cd frontend && pnpm --silent gen:api ) || { rm -f "$$before"; exit 1; }; \
+	if ! diff -q "$$before" $(SCHEMA_TYPES) >/dev/null 2>&1; then \
 		echo ""; \
-		echo "API contract artifacts are out of date:"; \
-		git status --porcelain -- $(OPENAPI_ARTIFACTS); \
+		echo "$(SCHEMA_TYPES) is out of date with docs/openapi.json:"; \
+		diff -u "$$before" $(SCHEMA_TYPES) | head -40; \
 		echo ""; \
 		echo "Run 'make openapi' and commit the result."; \
+		rm -f "$$before"; \
 		exit 1; \
-	fi
-	@echo "==> API contract artifacts are up to date"
+	fi; \
+	rm -f "$$before"; \
+	echo "==> API contract artifacts are up to date"
 
 # --- Formatting ---
 

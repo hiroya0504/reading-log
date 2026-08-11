@@ -3,7 +3,6 @@ package com.example.readinglog.health;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +17,7 @@ public class HealthController {
   @SecurityRequirements
   @Operation(summary = "Liveness probe. Open to unauthenticated callers.")
   @GetMapping("/health")
-  public Map<String, String> health() {
-    return Map.of("status", "ok");
+  public HealthResponse health() {
+    return new HealthResponse("ok");
   }
 }
