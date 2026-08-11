@@ -1,0 +1,33 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Java / Gradle
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/coverage/
+frontend/tsconfig.tsbuildinfo
+
+# Logs / env
+*.log
+.env
+.env.local
+.env.*.local
+
+# Docker volumes (local data)
+.data/
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reading-log-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reading_log
+      POSTGRES_USER: reading
+      POSTGRES_PASSWORD: reading
+    # 5432 is taken by the photo-management stack on this machine. Keep 5433 so both
+    # projects can run at the same time. The container-internal port stays 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reading -d reading_log"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
