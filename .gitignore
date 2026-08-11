@@ -31,3 +31,8 @@ frontend/tsconfig.tsbuildinfo
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Review harness run artifacts. Kept out of git so PR diffs stay readable and, more importantly,
+# so `git status` stays clean — the reviewers inspect the working tree and a dirty status would
+# mislead them. They persist locally, which is what the tuning loop reads.
+.review/
