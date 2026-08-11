@@ -61,6 +61,13 @@ describe("BookList", () => {
     expect(screen.queryByText(/ページ/)).not.toBeInTheDocument();
   });
 
+  it("reports a read failure instead of claiming the shelf is empty", () => {
+    render(<BookList books={[]} error="本の一覧を取得できませんでした。" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("本の一覧を取得できませんでした。");
+    expect(screen.queryByText(/まだ本がありません/)).not.toBeInTheDocument();
+  });
+
   it("falls back to a placeholder when the author is unknown", () => {
     render(<BookList books={[book({ author: null })]} />);
 

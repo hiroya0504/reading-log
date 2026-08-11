@@ -77,6 +77,10 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
    * Stamps the responses Spring builds for the standard MVC exceptions with the same {@code
    * errorCode} extension the rest of the contract uses, so a client can branch on one field
    * regardless of which layer rejected the request.
+   *
+   * <p>The code is derived from the status itself ({@code 404} → {@code NOT_FOUND}, {@code 405} →
+   * {@code METHOD_NOT_ALLOWED}). Collapsing every 4xx to a single value would defeat the purpose:
+   * the client would be told "bad request" for a wrong URL and a wrong method alike.
    */
   @Override
   protected ResponseEntity<Object> handleExceptionInternal(
@@ -88,10 +92,17 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> response =
         super.handleExceptionInternal(ex, body, headers, statusCode, request);
     if (response != null && response.getBody() instanceof ProblemDetail detail) {
-      String errorCode = statusCode.is4xxClientError() ? "BAD_REQUEST" : "INTERNAL_ERROR";
-      detail.setProperty("errorCode", errorCode);
+      detail.setProperty("errorCode", errorCodeFor(statusCode));
     }
     return response;
+  }
+
+  private static String errorCodeFor(HttpStatusCode statusCode) {
+    HttpStatus status = HttpStatus.resolve(statusCode.value());
+    if (status != null) {
+      return status.name();
+    }
+    return statusCode.is4xxClientError() ? "BAD_REQUEST" : "INTERNAL_ERROR";
   }
 
   /**

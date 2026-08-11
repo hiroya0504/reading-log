@@ -16,7 +16,20 @@ const STATUS_CLASSES: Record<BookStatus, string> = {
  * Presentational only — it receives books and renders them. Keeping the fetch in the page (as
  * `HealthBadge` does) is what lets this be tested without standing up the API.
  */
-export function BookList({ books }: { books: Book[] }) {
+export function BookList({ books, error }: { books: Book[]; error?: string }) {
+  // "Could not read the list" and "there are no books" must not look alike: telling someone their
+  // shelf is empty when the request failed reads as data loss.
+  if (error !== undefined) {
+    return (
+      <p
+        role="alert"
+        className="rounded-md border border-red-300 p-6 text-center text-sm text-red-700"
+      >
+        {error}
+      </p>
+    );
+  }
+
   if (books.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-6 text-center text-sm opacity-70">

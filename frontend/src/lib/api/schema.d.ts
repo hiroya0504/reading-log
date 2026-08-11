@@ -12,10 +12,10 @@ export interface paths {
             cookie?: never;
         };
         /** List the authenticated user's books, newest first. */
-        get: operations["list"];
+        get: operations["listBooks"];
         put?: never;
         /** Register a book for the authenticated user. */
-        post: operations["create"];
+        post: operations["createBook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -85,19 +85,19 @@ export interface components {
              * Format: date-time
              * @description 登録日時。
              */
-            createdAt?: string;
+            createdAt: string;
             /**
              * Format: int32
              * @description 現在のページ。既定は 0。
              * @example 0
              */
-            currentPage?: number;
+            currentPage: number;
             /**
              * Format: int64
              * @description 本の ID。
              * @example 1
              */
-            id?: number;
+            id: number;
             /**
              * @description ISBN。未設定なら null。
              * @example 9784123456789
@@ -115,12 +115,12 @@ export interface components {
              * @description 読書状態。
              * @enum {string}
              */
-            status?: "WANT_TO_READ" | "READING" | "DONE";
+            status: "WANT_TO_READ" | "READING" | "DONE";
             /**
              * @description 書名。
              * @example エラーハンドリング入門
              */
-            title?: string;
+            title: string;
             /**
              * Format: int32
              * @description 総ページ数。未設定なら null。
@@ -131,7 +131,7 @@ export interface components {
              * Format: date-time
              * @description 更新日時。
              */
-            updatedAt?: string;
+            updatedAt: string;
         };
         HealthResponse: {
             /**
@@ -149,10 +149,12 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list: {
+    listBooks: {
         parameters: {
             query?: {
+                /** @description 1 ページの件数。1〜100。 */
                 limit?: number;
+                /** @description 読み飛ばす件数。0 以上。 */
                 offset?: number;
             };
             header?: never;
@@ -172,7 +174,7 @@ export interface operations {
             };
         };
     };
-    create: {
+    createBook: {
         parameters: {
             query?: never;
             header?: never;

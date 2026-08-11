@@ -2,6 +2,7 @@ package com.example.readinglog.book;
 
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
@@ -31,6 +32,11 @@ public interface BookMapper {
    * row in one round trip. The usual {@code @Insert} + {@code @Options(useGeneratedKeys = true)}
    * writes the key back onto a mutable property, which a {@code record} does not have.
    *
+   * <p>{@code flushCache = true} because MyBatis treats an {@code @Select} as a read and caches its
+   * result for the session: two calls with identical arguments inside one transaction would return
+   * the first row instead of inserting a second. It does not matter with today's single caller, and
+   * it would be a silent lost write the moment a second one appears.
+   *
    * <p>{@code created_at} / {@code updated_at} / {@code current_page} come from the column defaults
    * rather than from the caller.
    */
@@ -41,6 +47,7 @@ public interface BookMapper {
       RETURNING id, user_id, title, author, isbn, total_pages, current_page,
                 status, rating, note, created_at, updated_at
       """)
+  @Options(flushCache = Options.FlushCachePolicy.TRUE)
   Book insert(
       @Param("userId") long userId,
       @Param("title") String title,

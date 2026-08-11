@@ -2,6 +2,8 @@ package com.example.readinglog.book;
 
 import com.example.readinglog.common.error.ValidationException;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,11 +30,19 @@ public class BookController {
     this.bookService = bookService;
   }
 
-  @Operation(summary = "List the authenticated user's books, newest first.")
+  @Operation(
+      operationId = "listBooks",
+      summary = "List the authenticated user's books, newest first.")
   @GetMapping("/books")
   public BookListResponse list(
-      @RequestParam(defaultValue = "" + DEFAULT_LIMIT) int limit,
-      @RequestParam(defaultValue = "0") int offset) {
+      @Parameter(description = "1 ページの件数。1〜" + MAX_LIMIT + "。")
+          @Schema(minimum = "1", maximum = "" + MAX_LIMIT, defaultValue = "" + DEFAULT_LIMIT)
+          @RequestParam(defaultValue = "" + DEFAULT_LIMIT)
+          int limit,
+      @Parameter(description = "読み飛ばす件数。0 以上。")
+          @Schema(minimum = "0", defaultValue = "0")
+          @RequestParam(defaultValue = "0")
+          int offset) {
     // Rejected rather than clamped: a client asking for 500 rows should learn that it did not get
     // them. Bean validation on request params raises ConstraintViolationException, which
     // ProblemDetailsAdvice does not translate, so the check is explicit and uses the domain
@@ -51,7 +61,7 @@ public class BookController {
 
   // No Location header: it would have to point at GET /api/books/{id}, which this slice does not
   // expose. A Location that 404s is worse than none; it arrives with the read-by-id endpoint.
-  @Operation(summary = "Register a book for the authenticated user.")
+  @Operation(operationId = "createBook", summary = "Register a book for the authenticated user.")
   @ResponseStatus(HttpStatus.CREATED)
   @PostMapping("/books")
   public BookResponse create(@Valid @RequestBody BookCreateRequest request) {

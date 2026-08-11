@@ -3,8 +3,11 @@ package com.example.readinglog.book;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.readinglog.TestcontainersConfiguration;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -52,6 +55,27 @@ class BookApiTest {
 
   private TestRestTemplate asOther() {
     return restTemplate.withBasicAuth(OTHER_USERNAME, OTHER_PASSWORD);
+  }
+
+  private ResponseEntity<JsonNode> postRaw(String body) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    return asDev().postForEntity("/api/books", new HttpEntity<>(body, headers), JsonNode.class);
+  }
+
+  /**
+   * Every rejection must come back as RFC 9457 with the {@code errorCode} extension — that is the
+   * one field a client is meant to branch on, whichever layer did the rejecting.
+   */
+  private void assertProblemDetail(
+      ResponseEntity<JsonNode> response, HttpStatus expectedStatus, String expectedErrorCode) {
+    assertThat(response.getStatusCode()).isEqualTo(expectedStatus);
+    assertThat(response.getHeaders().getContentType())
+        .isNotNull()
+        .satisfies(
+            type -> assertThat(type.isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)).isTrue());
+    assertThat(response.getBody().path("status").asInt()).isEqualTo(expectedStatus.value());
+    assertThat(response.getBody().path("errorCode").asText()).isEqualTo(expectedErrorCode);
   }
 
   private BookResponse create(TestRestTemplate client, String title) {
@@ -146,26 +170,89 @@ class BookApiTest {
     assertThat(ownerId).isEqualTo(devId);
   }
 
+  /**
+   * Every field the client can send must survive the round trip. Asserting only the defaults would
+   * pass even if the request values were dropped on the way to the INSERT.
+   */
   @Test
-  void blankTitleIsRejectedWithFieldLevelDetail() {
-    ResponseEntity<String> response =
+  void storesAndReturnsEveryFieldTheClientSent() {
+    ResponseEntity<BookResponse> response =
         asDev()
             .postForEntity(
-                "/api/books", new BookCreateRequest("   ", null, null, null, null), String.class);
+                "/api/books",
+                new BookCreateRequest(
+                    "リファクタリング", "Martin Fowler", "9784274224546", 480, BookStatus.READING),
+                BookResponse.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getBody())
+        .extracting(
+            BookResponse::title,
+            BookResponse::author,
+            BookResponse::isbn,
+            BookResponse::totalPages,
+            BookResponse::status)
+        .containsExactly("リファクタリング", "Martin Fowler", "9784274224546", 480, BookStatus.READING);
+
+    // Read back over HTTP too: a value could be returned from the INSERT's RETURNING clause and
+    // still not be what a later GET sees.
+    BookListResponse listed = asDev().getForEntity("/api/books", BookListResponse.class).getBody();
+    assertThat(listed.items())
+        .singleElement()
+        .extracting(BookResponse::status, BookResponse::author)
+        .containsExactly(BookStatus.READING, "Martin Fowler");
+  }
+
+  @ParameterizedTest
+  @EnumSource(BookStatus.class)
+  void acceptsEveryDeclaredStatus(BookStatus status) {
+    ResponseEntity<BookResponse> response =
+        asDev()
+            .postForEntity(
+                "/api/books",
+                new BookCreateRequest("状態の確認", null, null, null, status),
+                BookResponse.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(response.getBody().status()).isEqualTo(status);
+  }
+
+  /**
+   * Asserts the shape of {@code errors[]}, not just that the words appear somewhere in the body.
+   * The frontend builds its message from the {@code field} / {@code message} keys, and those key
+   * names exist nowhere else in the codebase — renaming them breaks the UI silently.
+   */
+  @Test
+  void blankTitleIsRejectedWithFieldLevelDetail() {
+    ResponseEntity<JsonNode> response =
+        asDev()
+            .postForEntity(
+                "/api/books", new BookCreateRequest("   ", null, null, null, null), JsonNode.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(response.getBody()).contains("VALIDATION_ERROR").contains("title");
+
+    JsonNode body = response.getBody();
+    assertThat(body.path("errorCode").asText()).isEqualTo("VALIDATION_ERROR");
+    assertThat(body.path("errors")).hasSize(1);
+
+    JsonNode error = body.path("errors").get(0);
+    assertThat(error.path("field").asText()).isEqualTo("title");
+    assertThat(error.path("message").asText()).isEqualTo("title is required");
   }
 
   @Test
   void nonPositiveTotalPagesIsRejected() {
-    ResponseEntity<String> response =
+    ResponseEntity<JsonNode> response =
         asDev()
             .postForEntity(
-                "/api/books", new BookCreateRequest("t", null, null, 0, null), String.class);
+                "/api/books", new BookCreateRequest("t", null, null, 0, null), JsonNode.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(response.getBody()).contains("totalPages");
+    assertThat(response.getBody().path("errorCode").asText()).isEqualTo("VALIDATION_ERROR");
+
+    JsonNode error = response.getBody().path("errors").get(0);
+    assertThat(error.path("field").asText()).isEqualTo("totalPages");
+    assertThat(error.path("message").asText()).isEqualTo("totalPages must be positive");
   }
 
   /**
@@ -174,40 +261,45 @@ class BookApiTest {
    */
   @Test
   void unknownStatusValueIsRejected() {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    ResponseEntity<String> response =
-        asDev()
-            .postForEntity(
-                "/api/books",
-                new HttpEntity<>("{\"title\":\"t\",\"status\":\"NOPE\"}", headers),
-                String.class);
+    ResponseEntity<JsonNode> response = postRaw("{\"title\":\"t\",\"status\":\"NOPE\"}");
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "BAD_REQUEST");
   }
 
   @Test
   void malformedJsonIsRejected() {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    ResponseEntity<String> response =
-        asDev().postForEntity("/api/books", new HttpEntity<>("{\"title\":", headers), String.class);
+    ResponseEntity<JsonNode> response = postRaw("{\"title\":");
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "BAD_REQUEST");
   }
 
   @Test
   void limitAboveTheMaximumIsRejected() {
-    ResponseEntity<String> response = asDev().getForEntity("/api/books?limit=101", String.class);
+    ResponseEntity<JsonNode> response =
+        asDev().getForEntity("/api/books?limit=101", JsonNode.class);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
   }
 
   @Test
   void negativeOffsetIsRejected() {
-    ResponseEntity<String> response = asDev().getForEntity("/api/books?offset=-1", String.class);
+    ResponseEntity<JsonNode> response =
+        asDev().getForEntity("/api/books?offset=-1", JsonNode.class);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+  }
+
+  /** {@code limit} must reach the SQL. Hard-code it in the mapper and this is what fails. */
+  @Test
+  void limitCapsTheNumberOfRowsReturned() {
+    create(asDev(), "1 冊目");
+    create(asDev(), "2 冊目");
+    create(asDev(), "3 冊目");
+
+    BookListResponse body =
+        asDev().getForEntity("/api/books?limit=2", BookListResponse.class).getBody();
+
+    assertThat(body.items()).extracting(BookResponse::title).containsExactly("3 冊目", "2 冊目");
   }
 
   @Test

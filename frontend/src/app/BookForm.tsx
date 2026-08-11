@@ -58,6 +58,15 @@ export function BookForm({ action }: { action: CreateBookAction }) {
         </p>
       )}
 
+      {/* Without this the form looks untouched after a successful submit — React clears the fields
+          and nothing else changes — so the natural reaction is to press the button again and file
+          the same book twice. Nothing in the database prevents the duplicate. */}
+      {state.status === "success" && (
+        <p role="status" className="text-sm text-green-700">
+          登録しました。
+        </p>
+      )}
+
       <button
         type="submit"
         disabled={pending}

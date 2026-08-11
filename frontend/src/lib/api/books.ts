@@ -2,13 +2,13 @@ import { api } from "./client";
 import type { components } from "./schema";
 
 /**
- * Every field on the generated `BookResponse` is optional: springdoc cannot tell which columns are
- * `NOT NULL`, so it marks them all nullable. Rather than sprinkle `?? ""` through the UI, this
- * module narrows the shape once, here, at the boundary.
+ * The columns that are `NOT NULL` in the database are `required` in the contract, so they arrive
+ * non-optional here and no fallback is needed for them. Only the genuinely nullable columns are
+ * normalised — `undefined` to `null` — so the UI has one absent-value to branch on.
  */
 type RawBook = components["schemas"]["BookResponse"];
 
-export type BookStatus = NonNullable<RawBook["status"]>;
+export type BookStatus = RawBook["status"];
 
 export type Book = {
   id: number;
@@ -30,12 +30,12 @@ export type CreateBookResult = { ok: true; book: Book } | { ok: false; message: 
 
 function toBook(raw: RawBook): Book {
   return {
-    id: raw.id ?? 0,
-    title: raw.title ?? "",
+    id: raw.id,
+    title: raw.title,
     author: raw.author ?? null,
     totalPages: raw.totalPages ?? null,
-    currentPage: raw.currentPage ?? 0,
-    status: raw.status ?? "WANT_TO_READ",
+    currentPage: raw.currentPage,
+    status: raw.status,
   };
 }
 
@@ -43,8 +43,12 @@ function toBook(raw: RawBook): Book {
  * Pulls a message out of an RFC 9457 problem+json body. The backend puts field-level failures in
  * `errors[]` (see `ProblemDetailsAdvice`), which is what the user actually needs to see — `detail`
  * alone just says "Request validation failed".
+ *
+ * The `errors[].field` / `errors[].message` key names are an extension property, so they are not in
+ * the generated schema and cannot be type-checked here. `BookApiTest` asserts their exact shape;
+ * that test is what keeps this cast honest.
  */
-function problemMessage(error: unknown): string {
+function problemMessage(error: unknown, fallback: string): string {
   if (typeof error === "object" && error !== null) {
     const body = error as {
       detail?: string;
@@ -60,15 +64,27 @@ function problemMessage(error: unknown): string {
       return body.detail;
     }
   }
-  return "登録に失敗しました。";
+  return fallback;
 }
 
-export async function listBooks(): Promise<Book[]> {
-  const { data, error } = await api.GET("/api/books");
-  if (error) {
-    throw new Error(problemMessage(error));
+/**
+ * Returned rather than thrown. The page renders the health badge, the form and the list together;
+ * a throw here would replace all three with Next.js's error page, so a failure to read the list
+ * would also take away the form the user could still use.
+ */
+export type ListBooksResult = { ok: true; books: Book[] } | { ok: false; message: string };
+
+export async function listBooks(): Promise<ListBooksResult> {
+  try {
+    const { data, error } = await api.GET("/api/books");
+    if (error) {
+      return { ok: false, message: problemMessage(error, "本の一覧を取得できませんでした。") };
+    }
+    return { ok: true, books: (data?.items ?? []).map(toBook) };
+  } catch {
+    // The backend not running at all is the common case in local development.
+    return { ok: false, message: "本の一覧を取得できませんでした。" };
   }
-  return (data?.items ?? []).map(toBook);
 }
 
 /**
@@ -78,7 +94,7 @@ export async function listBooks(): Promise<Book[]> {
 export async function createBook(input: BookInput): Promise<CreateBookResult> {
   const { data, error } = await api.POST("/api/books", { body: input });
   if (error || !data) {
-    return { ok: false, message: problemMessage(error) };
+    return { ok: false, message: problemMessage(error, "登録に失敗しました。") };
   }
   return { ok: true, book: toBook(data) };
 }

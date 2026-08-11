@@ -50,12 +50,29 @@ describe("BookForm", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("keeps no error on screen after a successful submit", async () => {
+  it("confirms a successful submit so the user does not file the book twice", async () => {
     render(<BookForm action={stubAction({ status: "success" })} />);
 
     await userEvent.click(screen.getByRole("button", { name: "登録する" }));
 
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("登録しました。"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears a previous error once a later submit succeeds", async () => {
+    const action = vi
+      .fn<(previous: CreateBookState, formData: FormData) => Promise<CreateBookState>>()
+      .mockResolvedValueOnce({ status: "error", message: "title: title is required" })
+      .mockResolvedValueOnce({ status: "success" });
+    render(<BookForm action={action} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "登録する" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "登録する" }));
+
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("登録しました。");
   });
 
   it("does not block submission client-side, leaving validation to the backend", async () => {
