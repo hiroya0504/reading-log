@@ -113,6 +113,15 @@ describe("createBook", () => {
     });
   });
 
+  it("reports a connection failure instead of throwing", async () => {
+    POST.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+
   it("falls back to a generic message when the body carries nothing usable", async () => {
     POST.mockResolvedValue({ error: {} });
 

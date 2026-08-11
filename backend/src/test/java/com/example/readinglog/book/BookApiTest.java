@@ -14,6 +14,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -287,6 +288,22 @@ class BookApiTest {
         asDev().getForEntity("/api/books?offset=-1", JsonNode.class);
 
     assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+  }
+
+  /**
+   * The {@code errorCode} must follow the status, not be a single value for every 4xx. A 404 and a
+   * 405 are the cheapest ways to observe that: both go through {@code handleExceptionInternal},
+   * which is where the derivation lives.
+   */
+  @Test
+  void errorCodeFollowsTheStatusRatherThanCollapsingTo400() {
+    ResponseEntity<JsonNode> notFound =
+        asDev().getForEntity("/api/books/does-not-exist", JsonNode.class);
+    assertProblemDetail(notFound, HttpStatus.NOT_FOUND, "NOT_FOUND");
+
+    ResponseEntity<JsonNode> wrongMethod =
+        asDev().exchange("/api/books", HttpMethod.DELETE, null, JsonNode.class);
+    assertProblemDetail(wrongMethod, HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED");
   }
 
   /** {@code limit} must reach the SQL. Hard-code it in the mapper and this is what fails. */

@@ -92,9 +92,16 @@ export async function listBooks(): Promise<ListBooksResult> {
  * "unreachable"; a form that silently drops the user's input cannot.
  */
 export async function createBook(input: BookInput): Promise<CreateBookResult> {
-  const { data, error } = await api.POST("/api/books", { body: input });
-  if (error || !data) {
-    return { ok: false, message: problemMessage(error, "登録に失敗しました。") };
+  try {
+    const { data, error } = await api.POST("/api/books", { body: input });
+    if (error || !data) {
+      return { ok: false, message: problemMessage(error, "登録に失敗しました。") };
+    }
+    return { ok: true, book: toBook(data) };
+  } catch {
+    // A 4xx/5xx from the backend arrives as `error` above; this is the connection never being
+    // made. openapi-fetch rethrows that, and with no error boundary in `app/` it would replace the
+    // whole page — taking the form and everything the user typed with it.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
   }
-  return { ok: true, book: toBook(data) };
 }
