@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Superseded runs on the same branch are pointless; cancel them instead of paying for them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: nothing here needs to write to the repository.
+permissions:
+  contents: read
+
+# Every step below calls a Makefile target. Keeping the commands in the Makefile is what makes
+# "local green == CI green" a structural property rather than something to remember.
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Lint
+        run: make lint-backend
+
+      # Runs OpenApiSnapshotTest, which fails when docs/openapi.json no longer matches the code.
+      - name: Test
+        run: make test-backend
+
+      - name: Build
+        run: make build-backend
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: |
+            backend/build/reports/
+            backend/build/test-results/
+          retention-days: 7
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: make lint-frontend
+
+      - name: Test
+        run: make test-frontend
+
+      - name: Build
+        run: make build-frontend
+
+      # The frontend half of the contract harness: regenerates schema.d.ts from the committed
+      # docs/openapi.json and fails if the result differs from what was committed.
+      - name: Check API contract artifacts
+        run: make openapi-check
