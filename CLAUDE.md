@@ -38,8 +38,9 @@ Claude Code のコマンド:
 **PR を開く前に `/review` を回す。** CI では動かないので、実行を強制する仕組みは無い。
 
 - レビュアーはコードを書いたセッションとは別の subagent。**変更の要約を渡さない**（渡すと独立性が消える）。
-- 各指摘は `fixed` か `rejected(理由付き)` で決着させる。**BLOCKER でも理由を書いて却下してよい**が、
-  黙って無視はしない。決着は `.review/<branch>/ledger.md` に残る。
+- 各指摘は `fixed` / `rejected(理由付き)` / `unresolved` で決着させる。**BLOCKER でも理由を書いて却下してよい**が、
+  黙って無視はしない。決着（`fixed` / `rejected` / `unresolved`）は `.review/<slug>/ledger.md` に残る
+  （`<slug>` = ブランチ名の `/` を `-` に置換したもの）。
 - 収束せずに上限・停滞で止まった場合は**未解決として扱う**。
 - `migration` / `auth` に触れる変更は、レビューの結果に関わらず人間のレビューを挟む。
 - 仕組みと「いつ捨てるか」は `docs/review-harness.md`。

@@ -34,7 +34,7 @@
 | 2 | `reviewer-correctness` / `reviewer-contract` / `reviewer-tests` | 3 つの独立した目的でレビュー。**全並列ではなく 2 段**（理由は「共有する作業ツリーが独立性を壊し返す」の節） |
 | 3 | `review-verifier` | finding 1 件につき 1 体。**反証専任**。迷ったら REFUTED |
 | 4 | `review-summarizer` | CONFIRMED のみ統合・重複排除・severity 調整 |
-| 5 | メインセッション | 各指摘を `fixed` / `rejected(理由)` で決着させ、`ledger.md` に記録 |
+| 5 / 6 | メインセッション | 停止条件を評価し（Stage 5）、各指摘を `fixed` / `rejected(理由)` / `unresolved` で決着させて `ledger.md` に記録（Stage 6） |
 
 ## 独立性をどう作っているか
 
@@ -82,16 +82,27 @@ git worktree で `reviewer-tests` を隔離すれば並列に戻せるが、`.re
 
 ## ループ制御
 
-停止条件は 3 つ。
+停止条件は 4 つ。上から順に評価する。
 
 | 条件 | 意味 | 報告 |
 | --- | --- | --- |
+| 縮退ルート | routing が「ループなし」 | 残っていれば **未解決** |
 | 収束 | 未解決 BLOCKER = 0 かつ MAJOR = 0 | 完了 |
 | 上限 | ラウンド 3 に到達 | **未解決** |
-| 停滞 | 未解決件数が前ラウンドから減っていない | **未解決** |
+| 停滞 | 未解決 **BLOCKER+MAJOR** の件数が前ラウンドから減っていない | **未解決** |
 
 上限・停滞で抜けた場合を「完了」と報告しないこと。直せない指摘を延々と直そうとするのを止めるのが
 停滞検出の役目で、止まったこと自体は失敗ではない。
+
+**どの条件で抜けても、抜ける前に決着（`ledger.md` への記録）だけは必ず行う。** これを省くと、
+最も記録が要る回——直しきれずに止まった回——だけ台帳が空になる。
+
+### 収束は「直した」とは限らない
+
+未解決 BLOCKER/MAJOR が 0 になる経路は 2 つある。**修正した**か、**verifier が severity を
+引き下げた**か。後者は `review-verifier` の判定の方が校正されているという設計上の前提
+（`review-summarizer` の severity 規則）に基づく正当な経路だが、**報告では区別すること**。
+「MAJOR が消えた」と「MAJOR を直した」は違う。
 
 ### ラウンド間で修正をコミットする理由
 
@@ -115,7 +126,7 @@ Stage 6 の修正は、`make check` が緑になった時点で**コミットし
 
 ## 成果物
 
-`.review/<branch>/`（gitignore 済み）:
+`.review/<slug>/`（gitignore 済み。`<slug>` = ブランチ名の `/` を `-` に置換したもの）:
 
 ```
 context.md              入力契約。全レビュアーがこれを見る
@@ -123,7 +134,7 @@ diff.patch              Bash を持たない reviewer-correctness 用
 round<N>/findings-*.md  各軸の生の指摘
 round<N>/verdicts/*.md  1 finding 1 判定
 round<N>/report.md      統合結果 + キャリブレーション節
-ledger.md               全 finding の最終状態（fixed / rejected + 理由）
+ledger.md               全 finding の最終状態（fixed / rejected / unresolved + 理由）
 ```
 
 git に入れないのは、PR の diff を汚さないためと、**`git status` をクリーンに保つため**。

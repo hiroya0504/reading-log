@@ -8,7 +8,7 @@ You are the **orchestrator and the fixer**. You wrote this code, so you must not
 what the reviewer subagents are for, and their value comes entirely from not sharing your context.
 
 **Never summarise the change for a subagent.** Do not tell them what you intended, what you think is
-risky, or which files matter. They read `.review/<branch>/context.md` and the repository. Framing
+risky, or which files matter. They read `.review/<slug>/context.md` and the repository. Framing
 them is how this harness quietly stops working.
 
 The mechanism and the rationale for each stage are in `docs/review-harness.md`.
@@ -74,11 +74,21 @@ failed — say so in the final report rather than pretending the axis passed.
 
 ```bash
 git status --porcelain    # 空でなければ変異が復元されていない
-git diff                  # 何が残っているか見る
+git diff                  # 追跡済みファイルに何が残っているか
 ```
 
-空でなければ `git checkout -- <path>` で戻し、**その事実を最終報告に書く**（復元漏れが起きたこと
-自体が `reviewer-tests` のプロンプトの欠陥を示すデータ）。
+空でなければ戻し、**その事実を最終報告に書く**（復元漏れが起きたこと自体が `reviewer-tests` の
+プロンプトの欠陥を示すデータ）。
+
+戻し方は残骸の種類で違う。`git status --porcelain` は未追跡ファイル（`??`）も出すが、
+`git checkout --` は**追跡済みファイルの変更しか戻さない**。
+
+- 追跡済みの変更（`M`）→ `git checkout -- <path>`
+- 未追跡の残骸（`??`）→ 中身を見てから消す。`.review/` 配下なら成果物なので残す（gitignore 済みで
+  `git status` には出ない）
+
+未追跡ファイルを `git checkout --` で戻そうとして status が空にならないまま進むと、次ラウンドの
+preflight が `PREFLIGHT FAILED` で落ちる。**消す前に必ず中身を見る。**
 
 このチェックを省いてはいけない。復元の担保は `reviewer-tests` の自己申告 1 行しか無く、**復元に
 失敗した当人が書く申告**なので検証になっていない。しかも変異検証が finding にするのは定義上
@@ -108,10 +118,18 @@ Read the report yourself.
 
 ### Stage 5 — Stop conditions
 
-未解決 BLOCKER+MAJOR の件数は `report.md` の数字だけで数えない。**report.md の未解決 + Stage 3 で
-verify を打ち切った BLOCKER/MAJOR + report.md の「検証欠落」に載った BLOCKER/MAJOR** の合計。
-`report.md` は verdict の無い finding を採用しないので、この足し戻しをしないと「verify を省いた
-BLOCKER が 1 件あるのに収束」と誤報する。
+未解決 BLOCKER+MAJOR の件数は `report.md` の「このラウンドの判定」の数字だけで数えない。
+**その数字 + report.md の「検証欠落」に載った BLOCKER/MAJOR** の合計。`report.md` は verdict の
+無い finding を採用しないので、この足し戻しをしないと「verify を省いた BLOCKER が 1 件あるのに
+収束」と誤報する。
+
+Stage 3 で打ち切った分を別途足さないこと。**打ち切られた finding は verdict を持たないので、
+必ず「検証欠落」に載る**（`review-summarizer` の規則）。両方足すと同じ件を二重に数え、実際には
+減っているラウンドを停滞と誤判定する。打ち切った件のリストは、報告に「何を verify しなかったか」
+を書くために保持する。
+
+severity は verdict の修正案が反映された後の値で数える。**未解決 0 は「直した」を意味しない** —
+verifier が MAJOR を MINOR に引き下げた結果でも 0 になる。最終報告ではどちらの経路かを書く。
 
 Evaluate in this order:
 
