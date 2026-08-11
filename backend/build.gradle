@@ -52,6 +52,12 @@ tasks.named('test') {
     systemProperty 'openapi.update', findProperty('openapi.update') ?: 'false'
     // The snapshot lives outside the Gradle project dir, so hand the test the repo root.
     systemProperty 'repo.root', rootDir.parentFile.absolutePath
+
+    // docs/openapi.json is written outside the project directory, so Gradle cannot see it as an
+    // output and would happily report UP-TO-DATE while leaving a stale snapshot on disk.
+    if (findProperty('openapi.update') == 'true') {
+        outputs.upToDateWhen { false }
+    }
 }
 
 spotless {
