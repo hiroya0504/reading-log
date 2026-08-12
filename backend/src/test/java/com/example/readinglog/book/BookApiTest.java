@@ -3,6 +3,9 @@ package com.example.readinglog.book;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.readinglog.TestcontainersConfiguration;
+import com.example.readinglog.book.dto.BookCreateRequest;
+import com.example.readinglog.book.dto.BookListResponse;
+import com.example.readinglog.book.dto.BookResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package com.example.readinglog.book;
+package com.example.readinglog.book.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

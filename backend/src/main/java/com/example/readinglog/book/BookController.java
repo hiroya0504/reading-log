@@ -1,6 +1,8 @@
 package com.example.readinglog.book;
 
-import com.example.readinglog.common.error.ValidationException;
+import com.example.readinglog.book.dto.BookCreateRequest;
+import com.example.readinglog.book.dto.BookListResponse;
+import com.example.readinglog.book.dto.BookResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,8 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "book")
 public class BookController {
 
-  private static final int DEFAULT_LIMIT = 50;
-  private static final int MAX_LIMIT = 100;
+  // Mirrored from BookService so the published contract cannot drift from the rule the service
+  // actually enforces.
+  private static final int DEFAULT_LIMIT = BookService.DEFAULT_LIMIT;
+  private static final int MAX_LIMIT = BookService.MAX_LIMIT;
 
   private final BookService bookService;
 
@@ -43,17 +47,6 @@ public class BookController {
           @Schema(minimum = "0", defaultValue = "0")
           @RequestParam(defaultValue = "0")
           int offset) {
-    // Rejected rather than clamped: a client asking for 500 rows should learn that it did not get
-    // them. Bean validation on request params raises ConstraintViolationException, which
-    // ProblemDetailsAdvice does not translate, so the check is explicit and uses the domain
-    // exception that already maps to a 400 problem+json body.
-    if (limit < 1 || limit > MAX_LIMIT) {
-      throw new ValidationException("limit must be between 1 and " + MAX_LIMIT);
-    }
-    if (offset < 0) {
-      throw new ValidationException("offset must not be negative");
-    }
-
     List<BookResponse> items =
         bookService.list(limit, offset).stream().map(BookResponse::from).toList();
     return new BookListResponse(items);

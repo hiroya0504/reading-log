@@ -1,5 +1,6 @@
-package com.example.readinglog.book;
+package com.example.readinglog.book.dto;
 
+import com.example.readinglog.book.BookStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
