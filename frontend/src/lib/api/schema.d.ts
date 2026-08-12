@@ -73,7 +73,7 @@ export interface components {
         };
         BookListResponse: {
             /** @description 登録日時の新しい順。 */
-            items?: components["schemas"]["BookResponse"][];
+            items: components["schemas"]["BookResponse"][];
         };
         BookResponse: {
             /**

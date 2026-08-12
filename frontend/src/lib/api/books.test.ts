@@ -50,10 +50,39 @@ describe("listBooks", () => {
     });
   });
 
-  it("treats a missing items array as an empty shelf", async () => {
-    GET.mockResolvedValue({ data: {} });
+  it("reports an empty shelf only when the backend actually says the shelf is empty", async () => {
+    GET.mockResolvedValue({ data: { items: [] } });
 
     expect(await listBooks()).toEqual({ ok: true, books: [] });
+  });
+
+  // The 401 Spring Security returns has no body, so openapi-fetch reports `error: undefined` for a
+  // request that plainly failed. Treating that as success would render it as "no books yet".
+  it("does not read a bodyless failure as an empty shelf", async () => {
+    GET.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
+  });
+
+  it("does not read a failure with an empty-string body as an empty shelf", async () => {
+    GET.mockResolvedValue({ error: "", data: undefined });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
+  });
+
+  it("does not read a response missing items as an empty shelf", async () => {
+    GET.mockResolvedValue({ data: {} });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
   });
 
   it("reports a failure instead of throwing", async () => {

@@ -77,10 +77,16 @@ export type ListBooksResult = { ok: true; books: Book[] } | { ok: false; message
 export async function listBooks(): Promise<ListBooksResult> {
   try {
     const { data, error } = await api.GET("/api/books");
-    if (error) {
+    // `!data?.items` is not redundant with `error`. openapi-fetch leaves `error` falsy when a
+    // non-ok response carries no body — `undefined` for `Content-Length: 0`, `""` when the body is
+    // empty — and Spring Security's 401 is exactly that shape. Guarding on `error` alone would turn
+    // a rejected request into `{ ok: true, books: [] }`, which the UI renders as "no books yet":
+    // a failure that reads as data loss. `items` is `required` in the contract, so its absence is
+    // a broken response rather than an empty shelf.
+    if (error || !data?.items) {
       return { ok: false, message: problemMessage(error, "本の一覧を取得できませんでした。") };
     }
-    return { ok: true, books: (data?.items ?? []).map(toBook) };
+    return { ok: true, books: data.items.map(toBook) };
   } catch {
     // The backend not running at all is the common case in local development.
     return { ok: false, message: "本の一覧を取得できませんでした。" };
