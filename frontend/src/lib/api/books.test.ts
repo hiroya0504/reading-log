@@ -91,10 +91,15 @@ describe("listBooks", () => {
     expect(await listBooks()).toEqual({ ok: false, message: "Something broke" });
   });
 
+  // Distinct from the message above: this is the request never arriving, not the backend answering
+  // with a failure. Sharing one message would make the guard in `listBooks` untestable.
   it("survives the client throwing outright", async () => {
     GET.mockRejectedValue(new Error("ECONNREFUSED"));
 
-    expect(await listBooks()).toEqual({ ok: false, message: "本の一覧を取得できませんでした。" });
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
   });
 });
 
@@ -148,6 +153,18 @@ describe("createBook", () => {
     expect(await createBook({ title: "t" })).toEqual({
       ok: false,
       message: "バックエンドに接続できませんでした。",
+    });
+  });
+
+  // The 401 from Spring Security has no body, so openapi-fetch reports neither `error` nor `data`.
+  // Without the `!data` half of the guard this falls through to the catch and the user is told the
+  // backend is unreachable, when it answered and rejected them.
+  it("reports a bodyless failure as a failed registration, not as an unreachable backend", async () => {
+    POST.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "登録に失敗しました。",
     });
   });
 

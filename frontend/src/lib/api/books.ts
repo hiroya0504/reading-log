@@ -88,8 +88,12 @@ export async function listBooks(): Promise<ListBooksResult> {
     }
     return { ok: true, books: data.items.map(toBook) };
   } catch {
-    // The backend not running at all is the common case in local development.
-    return { ok: false, message: "本の一覧を取得できませんでした。" };
+    // The backend not running at all is the common case in local development. Worded differently
+    // from the guard above so the two are distinguishable — both to the user (a request that was
+    // answered and rejected is not the same as one that never arrived) and to the tests: with one
+    // shared message, deleting the guard would leave every case falling through to here and no
+    // test could tell. `createBook` splits them the same way.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
   }
 }
 

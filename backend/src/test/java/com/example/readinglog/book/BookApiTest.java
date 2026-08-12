@@ -201,10 +201,19 @@ class BookApiTest {
     // Read back over HTTP too: a value could be returned from the INSERT's RETURNING clause and
     // still not be what a later GET sees.
     BookListResponse listed = asDev().getForEntity("/api/books", BookListResponse.class).getBody();
+    // The snake_case columns are asserted here and not only on the POST response: the two paths are
+    // different SQL statements with their own column lists, so `total_pages` / `current_page` can
+    // drift in the list query alone — which the UI shows as the progress line silently
+    // disappearing.
     assertThat(listed.items())
         .singleElement()
-        .extracting(BookResponse::status, BookResponse::author)
-        .containsExactly(BookStatus.READING, "Martin Fowler");
+        .extracting(
+            BookResponse::status,
+            BookResponse::author,
+            BookResponse::isbn,
+            BookResponse::totalPages,
+            BookResponse::currentPage)
+        .containsExactly(BookStatus.READING, "Martin Fowler", "9784274224546", 480, 0);
   }
 
   @ParameterizedTest
