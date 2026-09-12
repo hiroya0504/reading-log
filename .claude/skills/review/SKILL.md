@@ -1,5 +1,7 @@
 ---
+name: review
 description: 現在のブランチでマルチエージェントのレビューループを回す。独立したレビュアー、反証パス、そして修正と再レビューを収束まで繰り返す。
+disable-model-invocation: true
 ---
 
 現在のブランチを `main` と比較してレビューハーネスを回す。
