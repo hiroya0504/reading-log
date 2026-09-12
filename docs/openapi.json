@@ -1,6 +1,140 @@
 {
   "components" : {
     "schemas" : {
+      "BookCreateRequest" : {
+        "properties" : {
+          "author" : {
+            "description" : "著者名。",
+            "example" : "山田太郎",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "isbn" : {
+            "description" : "ISBN。形式は検証しない。",
+            "example" : "9784123456789",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "読書状態。未指定なら WANT_TO_READ。",
+            "enum" : [
+              "WANT_TO_READ",
+              "READING",
+              "DONE"
+            ],
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "書名。必須。",
+            "example" : "エラーハンドリング入門",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totalPages" : {
+            "description" : "総ページ数。1 以上。",
+            "example" : 320,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "title"
+        ],
+        "type" : "object"
+      },
+      "BookListResponse" : {
+        "properties" : {
+          "items" : {
+            "description" : "登録日時の新しい順。",
+            "items" : {
+              "$ref" : "#/components/schemas/BookResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "items"
+        ],
+        "type" : "object"
+      },
+      "BookResponse" : {
+        "properties" : {
+          "author" : {
+            "description" : "著者名。未設定なら null。",
+            "example" : "山田太郎",
+            "type" : "string"
+          },
+          "createdAt" : {
+            "description" : "登録日時。",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currentPage" : {
+            "description" : "現在のページ。既定は 0。",
+            "example" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "description" : "本の ID。",
+            "example" : 1,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "isbn" : {
+            "description" : "ISBN。未設定なら null。",
+            "example" : "9784123456789",
+            "type" : "string"
+          },
+          "note" : {
+            "description" : "感想。未設定なら null。",
+            "type" : "string"
+          },
+          "rating" : {
+            "description" : "5 段階評価。未設定なら null。",
+            "example" : 4,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "description" : "読書状態。",
+            "enum" : [
+              "WANT_TO_READ",
+              "READING",
+              "DONE"
+            ],
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "書名。",
+            "example" : "エラーハンドリング入門",
+            "type" : "string"
+          },
+          "totalPages" : {
+            "description" : "総ページ数。未設定なら null。",
+            "example" : 320,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "updatedAt" : {
+            "description" : "更新日時。",
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "createdAt",
+          "currentPage",
+          "id",
+          "status",
+          "title",
+          "updatedAt"
+        ],
+        "type" : "object"
+      },
       "HealthResponse" : {
         "properties" : {
           "status" : {
@@ -26,6 +160,83 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/books" : {
+      "get" : {
+        "operationId" : "listBooks",
+        "parameters" : [
+          {
+            "description" : "1 ページの件数。1〜100。",
+            "in" : "query",
+            "name" : "limit",
+            "required" : false,
+            "schema" : {
+              "default" : 50,
+              "format" : "int32",
+              "maximum" : 100,
+              "minimum" : 1,
+              "type" : "integer"
+            }
+          },
+          {
+            "description" : "読み飛ばす件数。0 以上。",
+            "in" : "query",
+            "name" : "offset",
+            "required" : false,
+            "schema" : {
+              "default" : 0,
+              "format" : "int32",
+              "minimum" : 0,
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List the authenticated user's books, newest first.",
+        "tags" : [
+          "book"
+        ]
+      },
+      "post" : {
+        "operationId" : "createBook",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BookCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description" : "Created"
+          }
+        },
+        "summary" : "Register a book for the authenticated user.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
     "/api/health" : {
       "get" : {
         "operationId" : "health",

@@ -1,0 +1,179 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const GET = vi.fn();
+const POST = vi.fn();
+
+// `client.ts` is `server-only` and builds a real fetch client at import time, so the module is
+// replaced wholesale rather than mocked at the network layer.
+vi.mock("./client", () => ({
+  api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) },
+}));
+
+const { listBooks, createBook } = await import("./books");
+
+const RAW = {
+  id: 7,
+  title: "リファクタリング",
+  author: "Martin Fowler",
+  isbn: "9784274224546",
+  totalPages: 480,
+  currentPage: 12,
+  status: "READING" as const,
+  createdAt: "2026-08-12T00:00:00Z",
+  updatedAt: "2026-08-12T00:00:00Z",
+};
+
+describe("listBooks", () => {
+  beforeEach(() => {
+    GET.mockReset();
+  });
+
+  it("normalises absent optional fields to null", async () => {
+    GET.mockResolvedValue({
+      data: { items: [{ ...RAW, author: undefined, totalPages: undefined }] },
+    });
+
+    const result = await listBooks();
+
+    expect(result).toEqual({
+      ok: true,
+      books: [
+        {
+          id: 7,
+          title: "リファクタリング",
+          author: null,
+          totalPages: null,
+          currentPage: 12,
+          status: "READING",
+        },
+      ],
+    });
+  });
+
+  it("reports an empty shelf only when the backend actually says the shelf is empty", async () => {
+    GET.mockResolvedValue({ data: { items: [] } });
+
+    expect(await listBooks()).toEqual({ ok: true, books: [] });
+  });
+
+  // The 401 Spring Security returns has no body, so openapi-fetch reports `error: undefined` for a
+  // request that plainly failed. Treating that as success would render it as "no books yet".
+  it("does not read a bodyless failure as an empty shelf", async () => {
+    GET.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
+  });
+
+  it("does not read a failure with an empty-string body as an empty shelf", async () => {
+    GET.mockResolvedValue({ error: "", data: undefined });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
+  });
+
+  it("does not read a response missing items as an empty shelf", async () => {
+    GET.mockResolvedValue({ data: {} });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
+    });
+  });
+
+  it("reports a failure instead of throwing", async () => {
+    GET.mockResolvedValue({ error: { detail: "Something broke" } });
+
+    expect(await listBooks()).toEqual({ ok: false, message: "Something broke" });
+  });
+
+  // Distinct from the message above: this is the request never arriving, not the backend answering
+  // with a failure. Sharing one message would make the guard in `listBooks` untestable.
+  it("survives the client throwing outright", async () => {
+    GET.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+});
+
+describe("createBook", () => {
+  beforeEach(() => {
+    POST.mockReset();
+  });
+
+  it("returns the created book", async () => {
+    POST.mockResolvedValue({ data: RAW });
+
+    const result = await createBook({ title: "リファクタリング" });
+
+    expect(result).toEqual({
+      ok: true,
+      book: expect.objectContaining({ id: 7, status: "READING" }),
+    });
+  });
+
+  it("builds the message from the field-level errors", async () => {
+    POST.mockResolvedValue({
+      error: {
+        detail: "Request validation failed",
+        errors: [
+          { field: "title", message: "title is required" },
+          { field: "totalPages", message: "totalPages must be positive" },
+        ],
+      },
+    });
+
+    const result = await createBook({ title: "" });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "title: title is required / totalPages: totalPages must be positive",
+    });
+  });
+
+  it("falls back to detail when there are no field errors", async () => {
+    POST.mockResolvedValue({ error: { detail: "limit must be between 1 and 100" } });
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "limit must be between 1 and 100",
+    });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    POST.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+
+  // The 401 from Spring Security has no body, so openapi-fetch reports neither `error` nor `data`.
+  // Without the `!data` half of the guard this falls through to the catch and the user is told the
+  // backend is unreachable, when it answered and rejected them.
+  it("reports a bodyless failure as a failed registration, not as an unreachable backend", async () => {
+    POST.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "登録に失敗しました。",
+    });
+  });
+
+  it("falls back to a generic message when the body carries nothing usable", async () => {
+    POST.mockResolvedValue({ error: {} });
+
+    expect(await createBook({ title: "t" })).toEqual({
+      ok: false,
+      message: "登録に失敗しました。",
+    });
+  });
+});

@@ -1,0 +1,117 @@
+import { api } from "./client";
+import type { components } from "./schema";
+
+/**
+ * The columns that are `NOT NULL` in the database are `required` in the contract, so they arrive
+ * non-optional here and no fallback is needed for them. Only the genuinely nullable columns are
+ * normalised — `undefined` to `null` — so the UI has one absent-value to branch on.
+ */
+type RawBook = components["schemas"]["BookResponse"];
+
+export type BookStatus = RawBook["status"];
+
+export type Book = {
+  id: number;
+  title: string;
+  author: string | null;
+  totalPages: number | null;
+  currentPage: number;
+  status: BookStatus;
+};
+
+export type BookInput = {
+  title: string;
+  author?: string;
+  totalPages?: number;
+  status?: BookStatus;
+};
+
+export type CreateBookResult = { ok: true; book: Book } | { ok: false; message: string };
+
+function toBook(raw: RawBook): Book {
+  return {
+    id: raw.id,
+    title: raw.title,
+    author: raw.author ?? null,
+    totalPages: raw.totalPages ?? null,
+    currentPage: raw.currentPage,
+    status: raw.status,
+  };
+}
+
+/**
+ * Pulls a message out of an RFC 9457 problem+json body. The backend puts field-level failures in
+ * `errors[]` (see `ProblemDetailsAdvice`), which is what the user actually needs to see — `detail`
+ * alone just says "Request validation failed".
+ *
+ * The `errors[].field` / `errors[].message` key names are an extension property, so they are not in
+ * the generated schema and cannot be type-checked here. `BookApiTest` asserts their exact shape;
+ * that test is what keeps this cast honest.
+ */
+function problemMessage(error: unknown, fallback: string): string {
+  if (typeof error === "object" && error !== null) {
+    const body = error as {
+      detail?: string;
+      errors?: Array<{ field?: string; message?: string }>;
+    };
+    const fieldErrors = body.errors
+      ?.map((e) => [e.field, e.message].filter(Boolean).join(": "))
+      .filter((line) => line.length > 0);
+    if (fieldErrors && fieldErrors.length > 0) {
+      return fieldErrors.join(" / ");
+    }
+    if (body.detail) {
+      return body.detail;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Returned rather than thrown. The page renders the health badge, the form and the list together;
+ * a throw here would replace all three with Next.js's error page, so a failure to read the list
+ * would also take away the form the user could still use.
+ */
+export type ListBooksResult = { ok: true; books: Book[] } | { ok: false; message: string };
+
+export async function listBooks(): Promise<ListBooksResult> {
+  try {
+    const { data, error } = await api.GET("/api/books");
+    // `!data?.items` is not redundant with `error`. openapi-fetch leaves `error` falsy when a
+    // non-ok response carries no body — `undefined` for `Content-Length: 0`, `""` when the body is
+    // empty — and Spring Security's 401 is exactly that shape. Guarding on `error` alone would turn
+    // a rejected request into `{ ok: true, books: [] }`, which the UI renders as "no books yet":
+    // a failure that reads as data loss. `items` is `required` in the contract, so its absence is
+    // a broken response rather than an empty shelf.
+    if (error || !data?.items) {
+      return { ok: false, message: problemMessage(error, "本の一覧を取得できませんでした。") };
+    }
+    return { ok: true, books: data.items.map(toBook) };
+  } catch {
+    // The backend not running at all is the common case in local development. Worded differently
+    // from the guard above so the two are distinguishable — both to the user (a request that was
+    // answered and rejected is not the same as one that never arrived) and to the tests: with one
+    // shared message, deleting the guard would leave every case falling through to here and no
+    // test could tell. `createBook` splits them the same way.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
+/**
+ * Unlike `getHealth`, failures are returned rather than swallowed. A badge can degrade to
+ * "unreachable"; a form that silently drops the user's input cannot.
+ */
+export async function createBook(input: BookInput): Promise<CreateBookResult> {
+  try {
+    const { data, error } = await api.POST("/api/books", { body: input });
+    if (error || !data) {
+      return { ok: false, message: problemMessage(error, "登録に失敗しました。") };
+    }
+    return { ok: true, book: toBook(data) };
+  } catch {
+    // A 4xx/5xx from the backend arrives as `error` above; this is the connection never being
+    // made. openapi-fetch rethrows that, and with no error boundary in `app/` it would replace the
+    // whole page — taking the form and everything the user typed with it.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
