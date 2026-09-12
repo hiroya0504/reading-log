@@ -31,7 +31,7 @@ Claude Code のスキル:
 
 | スキル | 用途 |
 | --- | --- |
-| `/review` | PR を開く前のレビュー。独立したレビュアー 3 軸 + 反証パスを収束まで回す。定義は `.claude/skills/review/SKILL.md` |
+| `/review` | PR を開く前のレビュー。独立したレビュアー 4 軸（正しさ / セキュリティ / ルール準拠 / テスト）+ 反証パスを収束まで回す。定義は `.claude/skills/review/SKILL.md` |
 
 ## レビュー手順
 

@@ -42,20 +42,27 @@ disable-model-invocation: true
 
 ### Stage 2 — レビュー
 
-レビュアーは**全並列にはできない**。3 軸は同じ作業ツリーを共有しており、そのうち 2 軸が書き込む。
+軸は 4 つ。`reviewer-correctness` / `reviewer-security` / `reviewer-rules` / `reviewer-tests`。
+
+レビュアーは**全並列にはできない**。4 軸は同じ作業ツリーを共有しており、そのうち 2 軸が書き込む。
 
 - `reviewer-tests` は変異検証で実装を一時的に壊す
-- `reviewer-contract` の `make openapi-check` は `schema.d.ts` を**その場で再生成する**（stale なら
+- `reviewer-rules` の `make openapi-check` は `schema.d.ts` を**その場で再生成する**（stale なら
   ファイルが書き換わったまま残る）
 
-全部同時に走らせると、`reviewer-correctness` が変異中のコードを読んで幻の BLOCKER を出し、
-`reviewer-tests` の最終 `git status --porcelain` チェックが他人の書き込みで汚れて復元失敗と誤認し、
-gradle が同時起動して落ちる。**独立性を作る仕組みが、共有ツリー越しに依存を作り返している。**
+全部同時に走らせると、Bash を持たない軸（`correctness` / `security`）が変異中のコードを読んで
+幻の BLOCKER を出し、`reviewer-tests` の最終 `git status --porcelain` チェックが他人の書き込みで
+汚れて復元失敗と誤認し、gradle が同時起動して落ちる。**独立性を作る仕組みが、共有ツリー越しに
+依存を作り返している。**
 
 したがって 2 段に分ける（routing が名指しした軸だけ、以下の順で）:
 
-1. `reviewer-correctness` と `reviewer-contract` を**並列**（一度に複数 Agent 呼び出し）
+1. `reviewer-correctness` / `reviewer-security` / `reviewer-rules` を**並列**（一度に複数 Agent 呼び出し）
 2. **返ってきてから** `reviewer-tests` を単独で
+
+**軸が 4 つになっても段は 2 つのまま。** 新しい `reviewer-security` は Bash を持たないので
+ツリーに書き込まず、段 1 で書き込むのは `reviewer-rules` の 1 体だけ。この「1 段に書き込む軸は
+1 体」が守られている限り段を増やす必要はない。
 
 各レビュアーに渡すのは次の 2 文だけ。
 
@@ -63,7 +70,7 @@ gradle が同時起動して落ちる。**独立性を作る仕組みが、共�
 > findings は `.review/<slug>/round<N>/findings-<axis>.md` に書く。これはラウンド `<N>`。
 
 段 1 が返ったら、段 2 に進む前に `git status --porcelain` を自分で確認する。空でなければ
-`reviewer-contract` が `schema.d.ts` を再生成したまま返している。`git checkout --` で戻してから
+`reviewer-rules` が `schema.d.ts` を再生成したまま返している。`git checkout --` で戻してから
 `reviewer-tests` を出す（汚れたツリーで変異検証を始めると復元先が壊れる）。
 
 返ってきたら、期待される `findings-*.md` が揃っているか確認する。**ファイルが無い軸は失敗した軸**。

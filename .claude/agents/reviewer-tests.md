@@ -40,7 +40,7 @@ cd backend && ./gradlew test --tests '*SomeTest'
 cd frontend && pnpm vitest run src/path/to/file.test.tsx
 ```
 
-`make openapi-check` は**実行しない** — それは `reviewer-contract` の担当する道具。
+`make openapi-check` は**実行しない** — それは `reviewer-rules` の担当する道具。
 
 ### 変異による証明（最も強い根拠）
 
@@ -60,6 +60,31 @@ cd frontend && pnpm vitest run src/path/to/file.test.tsx
 ---
 
 ## 何を見るか
+
+### テストが差分側で緩められていないか（最初に見る）
+
+変異検証は「今あるテストが弱い」ことを示す。この節は**「テストが弱められた」**を示す。
+差分の方向を見ないと後者は捕まらない。
+
+- 既存テストのアサーションが緩められていないか（`assertEquals` → `assertNotNull`、
+  `.extracting(...)` からフィールドが消えている、`isEqualTo` → `isNotNull`）。
+- `@Test` / `it()` / `test()` が削除されていないか。消えているなら理由が PR body かコミット
+  メッセージに書かれているか。**理由の無い削除は、消さないと通らなかった可能性を意味する。**
+- `@Disabled` / `@Ignore` / `it.skip` / `test.skip` / `xit` / `describe.skip` が追加されていないか。
+- **期待値が実装の出力に合わせて書き換えられていないか。** これがバグを仕様として固定する経路で、
+  最も見つけにくい。実装側の変更と期待値の変更が同じコミットに入っているときは特に疑う。
+- `try { ... } catch (Exception e) { }` でテストが常に通るようになっていないか。
+  アサーションを 1 つも持たない `@Test` が増えていないか。
+
+**根拠の出し方**:
+
+```bash
+git diff main...HEAD -- '*Test*' '*test*'      # テストの差分だけを読む
+git show main:<path>                            # 緩和を疑ったら元の版を出す
+```
+
+**「緩められた」は元の版を示さないと主張にならない。** `evidence` に `git show main:` の該当行を
+引用すること。引用の無い緩和指摘は反証パスで落ちる。
 
 ### トートロジー / 空回りテスト
 - 実装を消しても通るテスト。
@@ -93,7 +118,9 @@ cd frontend && pnpm vitest run src/path/to/file.test.tsx
 
 - フォーマット / Lint / 型エラー（`make check` の担当）
 - ビジネスロジックの正しさそのもの → `reviewer-correctness`
-- migration・API 契約 → `reviewer-contract`
+- migration・API 契約・規約と設計ルール → `reviewer-rules`
+- 認可漏れ・インジェクション・機密情報の露出 → `reviewer-security`
+  （**その経路にテストが無いこと**は君の担当。経路自体が危険かどうかは書かない）
 - getter や record accessor のテストが無いこと（不要）
 - カバレッジ率。このプロジェクトは意図的に閾値を設けていない（CLAUDE.md 参照）
 
@@ -132,11 +159,15 @@ cd frontend && pnpm vitest run src/path/to/file.test.tsx
 | ラベル | 意味 |
 | --- | --- |
 | **BLOCKER** | 新しい振る舞いに対してテストが全く無く、かつその振る舞いが BLOCKER 級のリスク（認可・データ破壊）を持つ |
-| **MAJOR** | トートロジーテスト、テスト名と中身の乖離、「正しい」の定義に挙がった条件の未検証 |
-| **MINOR** | テスト階層の選択ミス、壊れやすい書き方 |
+| **MAJOR** | トートロジーテスト、テスト名と中身の乖離、「正しい」の定義に挙がった条件の未検証、**既存テストの意図的な弱体化**（アサーション緩和、skip の追加、期待値を実装の出力に合わせた書き換え） |
+| **MINOR** | テスト階層の選択ミス、壊れやすい書き方、**テスト削除の理由が書かれていない** |
 | **NIT** | 命名の好み |
 
 **迷ったら低い方を選ぶ。**
+
+緩和の severity は**意図の証明の強さ**で決める。元の版を引用でき、同じコミットで実装側も変わって
+いるなら MAJOR。緩和には見えるが理由が説明可能な範囲（リファクタに伴う書き換え等）なら MINOR。
+**緩和したと断定できないなら書かない。** 「改ざんの疑い」は、外れたときに最も高くつく指摘。
 
 ---
 

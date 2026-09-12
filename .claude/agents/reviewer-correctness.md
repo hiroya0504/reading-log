@@ -56,12 +56,11 @@ Delete when: 生成したモデルが、指示される前に自分のロジッ�
 - 想定内の業務エラーが `DomainException` のサブクラスとして投げられているか。生の
   `RuntimeException` / `IllegalStateException` / `IllegalArgumentException` を業務エラーに使っていないか。
 - 例外を握り潰していないか（catch して無視、ログだけ出して継続）。
-- エラーメッセージが内部状態をクライアントに漏らしていないか。
+- 例外の種類が HTTP ステータスに正しく対応しているか（`NotFoundException` を投げるべき場所で
+  `ValidationException` を投げていないか）。
 
-### 認可
-- acting user を `CurrentUser#requireUserId()` から取っているか。**リクエストボディの id を信用していないか**。
-- 他人のリソースを操作できてしまう経路が無いか（`user_id` での絞り込み漏れ）。
-- 認可チェックがデータアクセスの**前**に行われているか。
+> **認可は `reviewer-security` の担当。** `user_id` の絞り込み漏れ、acting user の出どころ、
+> 認可チェックの順序、エラーメッセージからの情報漏洩は書かない。
 
 ---
 
@@ -77,7 +76,8 @@ Delete when: 生成したモデルが、指示される前に自分のロジッ�
 他の軸の担当分も書かない:
 
 - テストの品質そのもの → `reviewer-tests` の担当
-- migration の安全性、API 命名、契約の形 → `reviewer-contract` の担当
+- migration の安全性、API 命名、契約の形、規約と設計ルールの違反 → `reviewer-rules` の担当
+- 認可漏れ、インジェクション、機密情報の露出 → `reviewer-security` の担当
 
 ツールが**見落とした**と疑う場合のみ、1 件だけ「ツールを拡張すべき」と書いてよい。個別事象を列挙しない。
 
@@ -87,7 +87,7 @@ Delete when: 生成したモデルが、指示される前に自分のロジッ�
 確かめられない主張を finding の因果に置かない**。君には Bash が無く、確かめる手段が無い。
 
 これは道具の制限ではなく担当範囲の定義。**コードが何をするか**が君の領分で、**ツールが何をするか**は
-それを実行できる軸（`reviewer-tests` / `reviewer-contract`）の領分。実測せずに書いた因果は反証パスで
+それを実行できる軸（`reviewer-tests` / `reviewer-rules`）の領分。実測せずに書いた因果は反証パスで
 落ちる（実際に落ちている）。書くなら「ソースを読んで確かめられる範囲」に留める。
 
 ---
@@ -100,8 +100,9 @@ Delete when: 生成したモデルが、指示される前に自分のロジッ�
 > context.md の「進捗は総ページ数を超えない」を満たさず、進捗率が 100% を超える。
 > 根拠: L48 で受け取った値をそのまま `mapper.updateCurrentPage` に渡している。
 
-> `BookService.java:72` — `findById` で取得した本の `user_id` を検証せずに更新している。
-> 他人の本を ID 指定で書き換えられる。根拠: L70-74 に `currentUser` の参照が無い。
+> `BookService.java:72` — `updateProgress` が `@Transactional` を持たず、read-modify-write の
+> 間に別リクエストの更新が入ると進捗が巻き戻る。根拠: L70 に `@Transactional` が無く、
+> L71 の `findById` と L74 の `updateCurrentPage` が別トランザクションで走る。
 
 ### 却下される finding（書くな）
 

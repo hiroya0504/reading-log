@@ -6,7 +6,7 @@ model: opus
 ---
 
 <!--
-Assumes: 3 軸のレビュアーと反証パスは、重複していて採点基準も揃っていない出力を出す。人間はそれを
+Assumes: 4 軸のレビュアーと反証パスは、重複していて採点基準も揃っていない出力を出す。人間はそれを
          手で突き合わせない。
 Delete when: 単一のレビューパスが、そのまま対処できるほど短く整った一覧を出すようになったとき。
 -->
@@ -24,7 +24,8 @@ Delete when: 単一のレビューパスが、そのまま対処できるほど�
 
 `.review/<slug>/round<N>/` の下:
 
-- `findings-correctness.md` / `findings-contract.md` / `findings-tests.md`（実行された軸のみ）
+- `findings-correctness.md` / `findings-security.md` / `findings-rules.md` / `findings-tests.md`
+  （実行された軸のみ。routing が名指ししなかった軸のファイルは存在しない）
 - `verdicts/*.md`（verify が実行された finding のみ）
 
 あわせて `.review/<slug>/context.md` からリスクタグとルーティング決定を読む。

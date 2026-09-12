@@ -21,9 +21,9 @@
 ```
         ┌──────────────────────────────────────────────┐
         │                                              │
-   Triage → Review(×3) → Verify → Summarize → Fix ─────┘
+   Triage → Review(×4) → Verify → Summarize → Fix ─────┘
    (context)  (2段)      (1件1体)  (統合)     (メイン)
-              └ correctness + contract を並列 → tests を単独
+              └ correctness + security + rules を並列 → tests を単独
         │                                      │
         └─── 収束 / 上限 3 / 停滞 ─────────────→ 最終報告 → (人間) merge
 ```
@@ -31,7 +31,7 @@
 | 段 | 実体 | 役割 |
 | --- | --- | --- |
 | 1 | `review-context` | 全レビュアーが見る正規化済み入力を作る。**「この変更における正しいの定義」**を書くのが本質 |
-| 2 | `reviewer-correctness` / `reviewer-contract` / `reviewer-tests` | 3 つの独立した目的でレビュー。**全並列ではなく 2 段**（理由は「共有する作業ツリーが独立性を壊し返す」の節） |
+| 2 | `reviewer-correctness` / `reviewer-security` / `reviewer-rules` / `reviewer-tests` | 4 つの独立した目的でレビュー。**全並列ではなく 2 段**（理由は「共有する作業ツリーが独立性を壊し返す」の節） |
 | 3 | `review-verifier` | finding 1 件につき 1 体。**反証専任**。迷ったら REFUTED |
 | 4 | `review-summarizer` | CONFIRMED のみ統合・重複排除・severity 調整 |
 | 5 / 6 | メインセッション | 停止条件を評価し（Stage 5）、各指摘を `fixed` / `rejected(理由)` / `unresolved` で決着させて `ledger.md` に記録（Stage 6） |
@@ -43,8 +43,8 @@ OpenAI の記事は独立性に 3 つのレバー（モデル / 目的 / ツー�
 
 | レバー | 状態 |
 | --- | --- |
-| **目的** | 3 軸で担当を分け、他軸の領分を明示的に out of scope にしている |
-| **ツール** | `reviewer-correctness` には **Bash を渡していない**（テストを実行できない = 「通ったから正しい」に逃げられない）。`reviewer-contract` は `make openapi-check` を、`reviewer-tests` は `make test` と変異検証を実行する |
+| **目的** | 4 軸で担当を分け、他軸の領分を明示的に out of scope にしている。境界が最も紛れやすい `rules` と `security` は、双方の「対象外」に相手の担当 3 項目を名指しで書いている |
+| **ツール** | `reviewer-correctness` と `reviewer-security` には **Bash を渡していない**（テストを実行できない = 「通ったから正しい」に逃げられない。security 側は「curl したら 403 だった」より SQL に `user_id` の条件が無いことを根拠にさせる）。`reviewer-rules` は `make openapi-check` と grep を、`reviewer-tests` は `make test` と変異検証を実行する |
 | **コンテキスト** | 全レビュアーが fresh。ラウンド間も引き継がない |
 | **モデル** | **得られていない。** 全て Claude Opus。同一ファミリー由来の盲点は残る |
 
@@ -56,22 +56,26 @@ OpenAI の記事は独立性に 3 つのレバー（モデル / 目的 / ツー�
 
 ## 共有する作業ツリーが独立性を壊し返す
 
-レビュアーの**コンテキスト**は独立しているが、**作業ツリーは 1 つ**で、3 軸のうち 2 軸が書き込む。
+レビュアーの**コンテキスト**は独立しているが、**作業ツリーは 1 つ**で、4 軸のうち 2 軸が書き込む。
 
 | 軸 | 何を書くか |
 | --- | --- |
 | `reviewer-tests` | 変異検証で実装を一時的に壊す |
-| `reviewer-contract` | `make openapi-check` が `schema.d.ts` を**その場で再生成する**（stale なら書き換わったまま残る） |
-| `reviewer-correctness` | 書かない（Bash 無し） |
+| `reviewer-rules` | `make openapi-check` が `schema.d.ts` を**その場で再生成する**（stale なら書き換わったまま残る） |
+| `reviewer-correctness` / `reviewer-security` | 書かない（Bash 無し） |
 
 3 つ同時に走らせると、独立しているはずの軸が共有ツリー越しに干渉する:
 
 - `reviewer-correctness` が変異中のコードを読み、幻の BLOCKER を出す
-- `reviewer-tests` の最終 `git status --porcelain` が `reviewer-contract` の書き込みで汚れ、
+- `reviewer-tests` の最終 `git status --porcelain` が `reviewer-rules` の書き込みで汚れ、
   自分の復元が失敗したと誤認する
 - gradle が同時に起動して落ちる。ツール由来の失敗が finding の evidence に化ける
 
-そこで Stage 2 は 2 段に分けている。**`correctness` + `contract` を並列 → 返ってから `tests` を単独。**
+そこで Stage 2 は 2 段に分けている。**`correctness` + `security` + `rules` を並列 → 返ってから
+`tests` を単独。**
+
+**軸を 4 つに増やしても段は 2 つのまま。** 判断基準は軸の数ではなく「1 段に書き込む軸が 1 体か」。
+`reviewer-security` は Bash を持たないのでツリーに書かず、段 1 で書き込むのは `rules` だけ。
 
 並列度が落ちるのは意図的なコスト。**書き込む軸を隔離する方が、1 ラウンドを速く回すより価値がある**
 （幻の指摘を 1 件でも通すと verify に 1 体、修正判断に 1 往復かかる）。
@@ -166,8 +170,9 @@ Anthropic の記事の核心:
 
 1. **`review-verifier`（Stage 3）** — レビュアーの指摘が十分正確になれば不要。最初に消える候補
 2. **`review-summarizer`（Stage 4）** — 軸を 1 つに減らせば不要
-3. **3 軸 → 1 軸** — 単一レビュアーで抜けが無くなれば統合
-4. **ループ** — 1 回のレビューで収束するなら不要
+3. **`reviewer-rules` の設計ルール担当** — ArchUnit を入れた時点で機械が弾くので不要
+4. **4 軸 → 1 軸** — 単一レビュアーで抜けが無くなれば統合
+5. **ループ** — 1 回のレビューで収束するなら不要
 
 逆に、**このハーネス全体が MVP の速度を落としていると感じたら、迷わず縮退ルートを広げる**か、
 使うのを `migration` / `auth` を含む PR だけに限定してよい。フルで回すと 1 ラウンドあたり
@@ -178,7 +183,9 @@ Anthropic の記事の核心:
 
 - `make check` が捕まえるもの（Spotless / ESLint / Prettier / tsc / OpenApiSnapshotTest）は
   全レビュアーで out of scope。二重に指摘するとノイズになる。
-- Claude Code 組み込みの `/security-review` とは重複させない。認証・秘密情報・SQL 構築・外部連携に
-  触れた PR では、こちらのレビューとは別に実行する。
+- セキュリティは `reviewer-security` が**全 PR で**見る（`reviewer-rules` が設定とルール違反を、
+  `reviewer-security` が到達可能性を担当する分担）。Claude Code 組み込みの `/security-review` は
+  **`auth` / `migration` タグが付いた PR でのみ**追加で実行する。これらは元々人間レビュー必須の
+  領域で、同一ファミリーのモデル同士では取れないモデル独立性を外から足す意味がある。
 - CI では動かさない。ローカルの `/review` のみ（API 課金を発生させないため）。
   したがって**実行を強制する仕組みが無い**。PR を開く前に自分で回すこと。
