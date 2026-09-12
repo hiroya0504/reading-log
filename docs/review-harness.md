@@ -140,6 +140,41 @@ ledger.md               全 finding の最終状態（fixed / rejected / unresol
 git に入れないのは、PR の diff を汚さないためと、**`git status` をクリーンに保つため**。
 レビュアー自身が作業ツリーの状態を見るので、汚れていると判断を誤る。
 
+### subagent は自分の成果物を書けないことがある
+
+Claude Code は subagent の `Write` をツール層でブロックする。
+
+```
+Subagents should return findings as text, not write report files.
+Include this content in your final response instead.
+```
+
+「subagent は findings をテキストで返すもので、レポートファイルを書くものではない」という
+Claude Code 側の設計であり、`.claude/settings.local.json` の権限とは無関係。`Write(.review/**)` を
+allow に入れても通らない。
+
+**Bash を持つエージェントはヒアドキュメント（`cat > path <<'EOF'`）で迂回できる。** 持たない
+エージェントは `Write` 以外に手段が無いので必ず当たる。該当するのは 2 体:
+
+| エージェント | Bash | 回避できるか |
+| --- | --- | --- |
+| `review-context` / `reviewer-contract` / `reviewer-tests` / `review-verifier` | あり | できる |
+| `review-summarizer` | なし | **できない** |
+| `reviewer-correctness` | なし | **できない。かつ Bash を渡してはいけない** |
+
+実行ごとに「拒否がブレる」ように見えるが、**ブレているのは拒否ではなくエージェント側のツール選択**。
+Bash を持つ軸が `Write` を選んだ回はブロックされ、`cat >` を選んだ回は通る。ガードレール自体は決定的。
+
+`reviewer-correctness` に Bash を渡す回避は**取れない**。「shell を持たされていないのは意図的」が
+この軸の存在理由そのもので、渡した瞬間に「テストが通った、ゆえに正しい」に逃げられるようになる。
+
+したがって `SKILL.md` のフォールバック節——**書き込みを拒否されたら本文を返り値で返し、
+オーケストレータが逐語のまま所定パスに保存する**——は、その場しのぎの回避策ではなく
+**構造的に必須**。これが無いと、3 軸のうち最も判断が主観的な軸が成果物を 1 つも残せない。
+
+`review-summarizer` については `Bash` を足せば直る（この軸の Bash なしに設計上の根拠は無い）。
+ただしフォールバックはどうせ `reviewer-correctness` のために必要なので、**足す実利は薄い**。
+
 ## チューニング
 
 `report.md` の「反証で却下された指摘」がプロンプト調整の入力。
