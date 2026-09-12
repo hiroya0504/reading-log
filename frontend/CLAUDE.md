@@ -37,3 +37,16 @@ const { data, error } = await api.GET("/api/books");
 - App Router (`src/app/`)
 - テストは `*.test.tsx` を実装ファイルの隣に置く（`@/` エイリアスは `src/`）
 - Server Components がデフォルト。クライアント機能は `"use client"` を明示
+
+### 境界
+
+守るべき規則。**いずれも現行コードが満たしている**ので、破れていればそれは新しい違反:
+
+- **`lib/api/client.ts` を import するのは `lib/api/` 配下だけ。** `app/` のコンポーネントは
+  `lib/api/<resource>.ts` が公開する関数と型だけを使う（現状は `books.ts` / `health.ts`）。
+  `client.ts` は `import "server-only"` 付きなので、この境界が資格情報をブラウザバンドルから
+  遠ざける実効的な壁になっている。
+- **`"use client"` は対話が必要な葉コンポーネントにのみ付ける。** データ取得とページは
+  Server Component に残す（現状 `"use client"` は `BookForm.tsx` のみ）。
+- Server Action と Client Component が共有する型は専用ファイルに切る（`create-book-state.ts`）。
+  どちらかに置くと `"use client"` 境界をまたぐ import が生まれる。
