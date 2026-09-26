@@ -2,7 +2,7 @@
 //
 // Everything that can be decided deterministically lives here rather than in the model:
 // which findings become inline comments, how many, in what order, and what the comments look
-// like. Claude only returns {detected_count, findings[]}; it has no permission to post.
+// like. Claude only returns {detected_count, findings[], dropped[]}; it has no permission to post.
 //
 // Called from actions/github-script in .github/workflows/ai-review.yml. The pure functions are
 // exported separately so post-review.test.js can exercise them without GitHub.
@@ -19,6 +19,8 @@ const PERSPECTIVE_TITLES = new Map([
   ['TESTS', 'テスト（ルール外の観点）'],
 ]);
 const FOOTER = '🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要';
+// Detector text is long; a dropped entry only needs enough to recognise the finding.
+const DROPPED_ISSUE_MAX = 300;
 
 /**
  * Lines on the new side of a unified-diff patch that GitHub accepts review comments on:
@@ -128,6 +130,43 @@ function summaryLine(f, titles = new Map()) {
   ].join('\n');
 }
 
+function truncate(text, max) {
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+// Collapses newlines so a multi-line reason cannot break out of its list item.
+function oneLine(text) {
+  return text.replace(/\s*\n\s*/g, ' ').trim();
+}
+
+/**
+ * Findings the verifier dropped, folded away at the end of the summary. They are not posted
+ * inline — precision still comes first — but hiding them entirely meant a correct finding that
+ * the verifier happened to drop only surfaced on a later run (PR #13: all four test findings were
+ * detected on the first run, two were dropped and then kept on later runs). Listing them lets a
+ * human pick them up on the first pass.
+ */
+function droppedSection(dropped, titles = new Map()) {
+  if (dropped.length === 0) return [];
+  return [
+    '',
+    '<details>',
+    `<summary>検証で落とした指摘（${dropped.length}件）</summary>`,
+    '',
+    '検証役が「出すべきでない」と判定した指摘です。誤りとは限りません。必要なものだけ拾ってください。',
+    '',
+    ...dropped.map((d) =>
+      [
+        `- ${ruleLabel(d, titles)}　\`${d.file}:${d.line}\``,
+        `  - **指摘**：${oneLine(truncate(d.issue, DROPPED_ISSUE_MAX))}`,
+        `  - **落とした理由**：${oneLine(d.reason)}`,
+      ].join('\n'),
+    ),
+    '',
+    '</details>',
+  ];
+}
+
 /**
  * "検出 7件 → 検証通過 7件（統合後 5件、インライン 5件）". The merged count is shown only when
  * aggregation changed it, so a drop from 7 to 5 is not mistaken for the verifier rejecting two.
@@ -144,6 +183,7 @@ function summaryBody({
   verifiedCount,
   failedGroups = 0,
   findings,
+  dropped = [],
   parts,
   rulesSha,
   titles = new Map(),
@@ -190,6 +230,7 @@ function summaryBody({
       ...parts.overflow.map((f) => summaryLine(f, titles)),
     );
   }
+  out.push(...droppedSection(dropped, titles));
   return out.join('\n');
 }
 
@@ -223,6 +264,19 @@ function parseOutput(raw) {
     }
     if (!Number.isInteger(f.line) || f.line < 1) {
       throw new Error(`findings[${i}].line が 1 以上の整数ではありません`);
+    }
+  });
+  // Optional so output from a definition that predates it still posts.
+  if (data.dropped === undefined) data.dropped = [];
+  if (!Array.isArray(data.dropped)) throw new Error('dropped が配列ではありません');
+  data.dropped.forEach((d, i) => {
+    for (const key of ['rule_id', 'file', 'issue', 'reason']) {
+      if (typeof d?.[key] !== 'string' || d[key] === '') {
+        throw new Error(`dropped[${i}].${key} が空、または文字列ではありません`);
+      }
+    }
+    if (!Number.isInteger(d.line) || d.line < 1) {
+      throw new Error(`dropped[${i}].line が 1 以上の整数ではありません`);
     }
   });
   return data;
@@ -261,6 +315,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
     verifiedCount: data.verified_count,
     failedGroups: data.failed_groups,
     findings: data.findings,
+    dropped: data.dropped,
     parts,
     rulesSha: rulesSha || 'unknown',
     titles,
@@ -293,6 +348,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
         { data: '差分外', header: true },
         { data: '上限超過', header: true },
         { data: '検出失敗グループ', header: true },
+        { data: '検証で落とした', header: true },
       ],
       [
         String(data.detected_count),
@@ -302,6 +358,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
         String(parts.outOfDiff.length),
         String(parts.overflow.length),
         String(data.failed_groups),
+        String(data.dropped.length),
       ],
     ])
     .addRaw(`rules.md: ${rulesSha || 'unknown'}`)
@@ -323,5 +380,6 @@ module.exports = {
   inlineBody,
   summaryBody,
   countsLine,
+  droppedSection,
   MAX_INLINE,
 };
