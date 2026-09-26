@@ -1,8 +1,8 @@
 # テストのルール定義
 
-backend のテストの書き方の規約。2 つの役割を兼ねる。
+backend と frontend のテストの書き方の規約。2 つの役割を兼ねる。
 
-- **書く側の規約**: backend のテストを書くときは、このファイルに従う（`backend/CLAUDE.md` から参照している）。
+- **書く側の規約**: テストを書くときは、このファイルに従う（`backend/CLAUDE.md` と `frontend/CLAUDE.md` から参照している）。
 - **AI レビューの判定基準**: テストの観点の検出役（`review-detector-tests`）と、`TEST-` で始まるルール ID の指摘を照合する検証役（`review-verifier`）が読む。
 
 「対象外」と共通の原則は `common.md` にある。そちらも必ず読む。
@@ -27,6 +27,25 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 
 今の backend はほぼ組み立て役なので、`BookApiTest` のような API テストが中心になる。
 
+### frontend での境界
+
+frontend（Vitest + Testing Library）でも同じ考え方で、「アプリの外」との境界だけを差し替える。
+
+| 依存 | 扱い | 理由 |
+| --- | --- | --- |
+| バックエンドの HTTP API（`src/lib/api/client.ts` の `api`） | **モックにしてよい。** 送ったリクエスト（パスと本体）を確かめてよい | プロセスの外。送るリクエストはバックエンドとの契約そのもので、観測できる振る舞い |
+| Next.js の実行時（`next/cache` / `next/navigation`） | モックにしてよい | テストの中にはサーバーが無い |
+| コンポーネントに props で渡す Server Action | スタブを渡してよい | ブラウザから見ると、サーバーへの呼び出し（プロセスの外） |
+| 自前のモジュール（`@/lib/api/books`、`./actions`、子コンポーネント、`./book-form-state` など） | **モックにしない** | 管理下の依存。モックにすると、つなぎ目の誤り（値の詰め替え、エラー文の組み立て）を確かめられない |
+
+| コードの種類 | 例 | テスト |
+| --- | --- | --- |
+| 計算・判定（依存なし） | `progressPercent`、id の検証 | 単体テスト（直接呼ぶ） |
+| API ラッパー・Server Action（組み立て役） | `lib/api/books.ts`、`app/actions.ts` | `client.ts` と Next.js の実行時だけを差し替えて呼ぶ |
+| 対話のあるコンポーネント | `BookForm`、`ProgressForm`、`DeleteBookButton` | Testing Library で描画し、利用者の操作（`userEvent`）で確かめる |
+| 表示だけのコンポーネント | `BookList`、`ProgressBar` | Testing Library で描画し、表示される内容を確かめる |
+| ページ（`page.tsx`） | データの取得と部品の組み合わせだけ | テストしない。**分岐や計算を書いたら関数に切り出して単体テストにする** |
+
 ## 書き方の約束（レビューの対象外）
 
 次は書く側が守る約束で、AI レビューでは指摘しない（`common.md` の「命名」「好み」と同じ扱い）。
@@ -35,17 +54,21 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 - **テスト名は振る舞いを表す。** `updateOfAnotherUsersBookIsNotFoundAndChangesNothing` のように、条件と結果を書く。メソッド名をなぞらない。
 - **エンドポイントごとに `@Nested` でまとめる。** 準備（本の登録、HTTP 呼び出し）は外側のクラスのヘルパで行う。
 - **なぜそのテストが要るか**が名前から分からないときは、javadoc に書く（何を壊すと落ちるか）。
+- frontend では、対象のコンポーネント・関数ごとに `describe` でまとめ、`it` の名前は振る舞いを英語の文で書く（`"rejects a non-integer page count without calling the API"`）。
+- frontend の操作は `fireEvent` ではなく `userEvent` で行う（利用者の操作に近いため）。
 
 ## ルールの形
 
 各ルールの「指摘すること」「指摘しないこと」は、検出役と検証役がそのまま照合に使う。
-**指摘の位置（`file` / `line`）** は `review-detector-tests.md` の表に従う。確かめられていない振る舞いを指摘するルール（TEST-001〜005）は本体のコードの行、テストの書き方を指摘するルール（TEST-006〜008）はテストコードの行。
+**指摘の位置（`file` / `line`）** は `review-detector-tests.md` の表に従う。確かめられていない振る舞いを指摘するルール（TEST-001〜005）は本体のコードの行、テストの書き方を指摘するルール（TEST-006〜009）はテストコードの行。
+各ルールの「適用」に、backend と frontend のどちらに当てはめるかを書いている。当てはまらない側の差分には出さない。
 
 ---
 
 ## TEST-001 変更された振る舞いにテストがない
 
 - **重要度**: medium
+- **適用**: backend / frontend
 - **背景**: 差分で追加・変更した振る舞いを、どのテストも確かめていなければ、後の変更で壊れても気づけない。
 
 ### 指摘すること
@@ -55,6 +78,7 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
   - Service の分岐（`if`）と、それぞれの結果
   - エラーの経路（例外を送出する箇所と、それが返す HTTP ステータス・`errorCode`）
   - 差分の javadoc・コメントが約束している振る舞い（「〜は変更しない」「〜なら 404」など）
+  - frontend: コンポーネントが表示する内容とその条件、利用者の操作で Server Action に渡る値、成功・失敗それぞれの表示、API ラッパーや Server Action の成功・失敗それぞれの戻り値
 - `common.md` の「テストの観点での経路」の 4 つ（どの行か、どう変わるか、何が壊れるか、なぜ気づけないか）を示せるものに限る。
 
 ### 指摘しないこと
@@ -63,16 +87,20 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 - DB の列の既定値やフレームワークが保証する値だけを返すもの（`createdAt` / `updatedAt` の値、`id` の採番など）。
 - 取るに足らないコード（record のアクセサ、定数、`from` のような詰め替えだけのメソッド）。詰め替えの誤りは、それを使うエンドポイントのテストで確かめる。
 - 設定クラス（`config/`）や、`ProblemDetailsAdvice` のような横断的な処理そのもの。それを経由するエンドポイントのテストで確かめる。
+- frontend: ページ（`page.tsx`）や `layout.tsx` で、データを取得して部品に渡すだけの部分。ページに書かれた分岐や計算は除く（関数に切り出して単体テストにする）。
+- frontend: 生成物（`src/lib/api/schema.d.ts`）と、型だけのファイル。
 
 ### 修正案の例
 
-`BookApiTest` の該当するエンドポイントの `@Nested` クラスに、その振る舞いを HTTP から確かめるテストを足す。
+backend: `BookApiTest` の該当するエンドポイントの `@Nested` クラスに、その振る舞いを HTTP から確かめるテストを足す。
+frontend: 実装の隣の `*.test.ts(x)` の該当する `describe` に、描画と操作（または関数の呼び出し）で確かめるテストを足す。
 
 ---
 
 ## TEST-002 境界値の片側しか確かめていない
 
 - **重要度**: medium
+- **適用**: backend / frontend
 - **背景**: 比較の条件（`<` と `<=` の取り違え、`>= 0` と `> 0` の取り違え）は、境界ちょうどの値でしか見分けられない。弾かれる側だけ、または通る側の境界から離れた値だけのテストでは、1 文字の書き換えに気づけない（PR #15 で、`<=` を `<` にしても 58 件すべてが通った）。
 
 ### 指摘すること
@@ -81,6 +109,7 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
   - 境界ちょうどの値（通る側）で、受け付けられることを確かめるテスト
   - 境界の 1 つ外の値（弾かれる側）で、拒否されることを確かめるテスト
 - 対象は SQL の `WHERE` の比較、Java の `if` の比較、Bean Validation の `@Min` / `@Max` / `@Positive` / `@PositiveOrZero` / `@Size(max)`。
+  frontend では、TypeScript の比較（`<` / `<=` / `Math.min` / `Math.max` による上限・下限）と、切り捨て・切り上げの境目（`Math.floor` で 99% と 100% が分かれる値など）。
 - 境界の値を送っていても、その結果（ステータスコードや値）をアサーションで確かめていない場合も含む。
 
 ### 指摘しないこと
@@ -98,6 +127,7 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ## TEST-003 書き込みのレスポンスか、書き込んだ状態のどちらかしか確かめていない
 
 - **重要度**: medium
+- **適用**: backend
 - **背景**: 書き込み API のレスポンスは `RETURNING` の列から、読み直しの GET は `SELECT` の列から作られる。別の SQL なので、片方の列がずれても、もう片方だけを見るテストは通る。
 
 ### 指摘すること
@@ -121,12 +151,15 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ## TEST-004 入力の制約ごとの拒否のテストがない
 
 - **重要度**: medium
+- **適用**: backend / frontend
 - **背景**: 登録と更新の DTO は、それぞれ別に Bean Validation の制約を宣言している。制約が 1 つ外れても、DB の CHECK や列の長さで結局は失敗するが、フィールド名の付いた 400 ではなく、500 になってしまう。
+  frontend の Server Action は、バックエンドが見られない検査（空欄、整数でない値）だけを送る前に行う。検査が 1 つ外れると、`Number("")` の 0 のような、もっともらしいが誤った値が送られる。
 
 ### 指摘すること
 
 - 差分で追加・変更された**リクエスト DTO の制約アノテーション**（`@NotNull` / `@NotBlank` / `@Positive` / `@PositiveOrZero` / `@Size` など）について、その制約に違反する値を送り、**400 で、`errors[].field` がそのフィールド名になる**ことを確かめるテストが無い場合。
 - 同じ制約が別の DTO にもある場合、DTO ごとに必要（登録で確かめていても、更新で外れれば気づけない）。
+- frontend: 差分で追加・変更された、Server Action が送る前に行う検査について、その検査に引っかかる値を渡し、**エラーの状態が返り、API が呼ばれない**ことを確かめるテストが無い場合。Action ごとに必要。
 
 ### 指摘しないこと
 
@@ -136,12 +169,14 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ### 修正案の例
 
 `updateWithInvalidFieldsIsRejected` のように、DTO ごとにパラメータ化テストを置き、「違反する値」と「期待するフィールド名」を 1 行ずつ並べる。
+frontend では `it.each(["", "  ", "12.5", "abc"])` のように、引っかかる値を並べる。
 
 ---
 
 ## TEST-005 所有者の限定か認証のテストがない
 
 - **重要度**: high
+- **適用**: backend
 - **背景**: 他人の本が見える・変えられる不具合は、どのテストでも落ちないまま出荷されやすく、影響が最も大きい。`BookMapper` の `WHERE user_id = ...` を 1 つ消すだけで起きる。
 
 ### 指摘すること
@@ -166,30 +201,37 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ## TEST-006 管理下の依存をモックにしている
 
 - **重要度**: medium
+- **適用**: backend / frontend
 - **背景**: このアプリしか使わない DB や、自前の Bean をモックにすると、SQL やクラス間のつなぎ目の誤りを確かめられなくなる。さらに、呼び出し方の検証（`verify`）は実装の詳細に結合するので、振る舞いを変えないリファクタリングでもテストが落ちる。
 
 ### 指摘すること
 
 - 差分で追加・変更されたテストが、次のどれかをしている場合。
   - 自前の Bean（`*Mapper` / `*Service` / `CurrentUser` など）を `@MockitoBean` / `@MockBean` / `Mockito.mock` で置き換えている
+  - frontend: 自前のモジュール（`@/lib/api/*` のうち `client.ts` 以外、`./actions`、`./book-form-state`、子コンポーネントなど）を `vi.mock` で置き換えている
+  - frontend: 自前のモジュールの関数が呼ばれたことを `toHaveBeenCalled*` で確かめている（上の置き換えの結果として）
   - `JdbcTemplate` や `DataSource` をモックにしている
   - `verify(...)` で、自前の Bean のメソッドが呼ばれたことや、呼ばれた回数を確かめている
 
 ### 指摘しないこと
 
 - アプリ外から観測される依存（メール送信、外部 API など）をモックにしている場合。
+- frontend: `client.ts` の `api`、`next/cache` / `next/navigation` をモックにしている場合と、`client.ts` の `api` に送ったリクエストを `toHaveBeenCalledWith` で確かめている場合（「frontend での境界」の表）。
+- frontend: コンポーネントに props で渡す Server Action にスタブ（`vi.fn()`）を渡し、渡された値を確かめている場合。
 - テストの準備として、DB へ直接行を入れている場合（下の「公開 API で作れない状態」）。
 - ドメインロジックの単体テストで、依存そのものを持たないクラスを直接呼んでいる場合。
 
 ### 修正案の例
 
-モックを外し、`@SpringBootTest` + Testcontainers の API テストで HTTP から確かめる。呼び出しの検証は、その結果として観測できるもの（レスポンス、DB の状態）の検証に置き換える。
+backend: モックを外し、`@SpringBootTest` + Testcontainers の API テストで HTTP から確かめる。呼び出しの検証は、その結果として観測できるもの（レスポンス、DB の状態）の検証に置き換える。
+frontend: 自前のモジュールのモックを外し、その先の `client.ts` の `api` を差し替える。確かめるのは、`api` に送ったリクエストと、Action やコンポーネントが返す・表示する結果。
 
 ---
 
 ## TEST-007 テストの中に分岐やループがある
 
 - **重要度**: medium
+- **適用**: backend / frontend
 - **背景**: テストの中に分岐があると、どちらの枝が実行されたかをテストの結果から読めない。片方の枝のアサーションが一度も実行されていなくても通る。テストが確かめる内容は、読めば 1 通りに決まる必要がある。
 
 ### 指摘すること
@@ -201,7 +243,8 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 
 ### 指摘しないこと
 
-- テストデータの準備のための繰り返し（「10 冊登録する」の `IntStream.range(...).forEach(...)` など）。アサーションや Act を含まないもの。
+- テストデータの準備のための繰り返し（「10 冊登録する」の `IntStream.range(...).forEach(...)`、`FormData` を組み立てるヘルパの `for` など）。アサーションや Act を含まないもの。
+- パラメータ化の仕組みそのもの（`@ParameterizedTest`、`it.each`）。
 - AssertJ の `extracting` / `allSatisfy` など、アサーションのライブラリが提供する集合の検証。
 - `@BeforeEach` などの準備で、存在しなければ作る（`ON CONFLICT DO NOTHING`）ような SQL の中の条件。
 
@@ -214,6 +257,7 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ## TEST-008 既存のテストが弱められた
 
 - **重要度**: high
+- **適用**: backend / frontend
 - **背景**: 変更に合わせて既存のテストを消したり緩めたりすると、それまで確かめていた振る舞いが、誰にも確かめられなくなる。テストは通るので、レビューでしか気づけない。
 
 ### 指摘すること
@@ -233,6 +277,32 @@ Vladimir Khorikov『単体テストの考え方/使い方』（*Unit Testing Pri
 ### 修正案の例
 
 消したテストを戻す。付け替えが必要なら、元の経路を確かめるテストを別に残す（PR #13 の `/api/books/does-not-exist` → `/api/does-not-exist` の付け替えでは、非数値の id の経路を確かめる `nonNumericIdIsRejected` を別に足した）。
+
+---
+
+## TEST-009 要素を実装の詳細で探している
+
+- **重要度**: medium
+- **適用**: frontend
+- **背景**: CSS のクラスや DOM の構造で要素を探すテストは、見た目を変えるだけで落ちる。逆に、見た目が同じまま `<button>` が `<div>` になって、キーボードやスクリーンリーダーで操作できなくなっても通ってしまう。利用者が要素を見つける手がかり（役割と名前）で探せば、その両方を避けられる。
+
+### 指摘すること
+
+- 差分で追加・変更されたテストが、要素を次のどれかで探している場合。
+  - `container.querySelector` / `querySelectorAll`、`document.querySelector`
+  - `className` や CSS のクラス名、`style`
+  - `data-testid`（`getByTestId`）
+  - `container.firstChild` / `children[n]` など、DOM の構造の位置
+
+### 指摘しないこと
+
+- `getByRole` / `getByLabelText` / `getByText` / `getByPlaceholderText` / `getByDisplayValue` とその `query` / `find` 版。
+- 役割も名前も持たない要素（装飾の `<div>` など）を、表示の有無ではなく**描画されないこと**の確認のために `container` で見ている場合（`expect(container).toBeEmptyDOMElement()` など）。
+- `aria-valuenow` などのアクセシビリティ属性を、`getByRole` で取った要素について確かめている場合。
+
+### 修正案の例
+
+`getByRole("button", { name: "記録する" })`、`getByLabelText("今読んでいるページ")` のように、役割と名前で探す。探せない要素は、実装に `<label>` や `aria-label` を足して、利用者にも見つけられるようにする。
 
 ---
 

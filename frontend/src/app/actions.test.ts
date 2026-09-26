@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createBook = vi.fn();
-const updateBook = vi.fn();
-const deleteBook = vi.fn();
-const updateProgress = vi.fn();
+// Only what lies outside the app is replaced (test-rules.md, "frontend での境界"): the backend
+// behind `client.ts` and the Next.js runtime. `@/lib/api/books` runs for real, so the request each
+// action ends up sending — and the message it builds from a failure — is what gets checked.
+const POST = vi.fn();
+const PUT = vi.fn();
+const DELETE = vi.fn();
 const revalidatePath = vi.fn();
 // The real `redirect` throws to abort rendering; the stub does the same so code after it is proven
 // unreachable rather than merely unexercised.
@@ -11,11 +13,12 @@ const redirect = vi.fn<(path: string) => never>(() => {
   throw new Error("NEXT_REDIRECT");
 });
 
-vi.mock("@/lib/api/books", () => ({
-  createBook: (...args: unknown[]) => createBook(...args),
-  updateBook: (...args: unknown[]) => updateBook(...args),
-  deleteBook: (...args: unknown[]) => deleteBook(...args),
-  updateProgress: (...args: unknown[]) => updateProgress(...args),
+vi.mock("@/lib/api/client", () => ({
+  api: {
+    POST: (...args: unknown[]) => POST(...args),
+    PUT: (...args: unknown[]) => PUT(...args),
+    DELETE: (...args: unknown[]) => DELETE(...args),
+  },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => redirect(path) }));
@@ -23,6 +26,15 @@ vi.mock("next/navigation", () => ({ redirect: (path: string) => redirect(path) }
 const { createBookAction, updateBookAction, updateProgressAction, deleteBookAction } =
   await import("./actions");
 const { initialBookFormState } = await import("./book-form-state");
+
+const BOOK = {
+  id: 7,
+  title: "t",
+  currentPage: 0,
+  status: "WANT_TO_READ",
+  createdAt: "2026-09-20T00:00:00Z",
+  updatedAt: "2026-09-20T00:00:00Z",
+};
 
 function formData(fields: Record<string, string>) {
   const data = new FormData();
@@ -32,13 +44,20 @@ function formData(fields: Record<string, string>) {
   return data;
 }
 
-describe("createBookAction", () => {
-  beforeEach(() => {
-    createBook.mockReset().mockResolvedValue({ ok: true, book: {} });
-    revalidatePath.mockReset();
-  });
+function fieldError(field: string, message: string) {
+  return { error: { errors: [{ field, message }] } };
+}
 
-  it("passes the trimmed fields through to the API", async () => {
+beforeEach(() => {
+  POST.mockReset().mockResolvedValue({ data: BOOK });
+  PUT.mockReset().mockResolvedValue({ data: BOOK });
+  DELETE.mockReset().mockResolvedValue({ response: { ok: true, status: 204 } });
+  revalidatePath.mockReset();
+  redirect.mockClear();
+});
+
+describe("createBookAction", () => {
+  it("sends the trimmed fields to the API", async () => {
     await createBookAction(
       initialBookFormState,
       formData({
@@ -50,12 +69,14 @@ describe("createBookAction", () => {
       }),
     );
 
-    expect(createBook).toHaveBeenCalledWith({
-      title: "リファクタリング",
-      author: "Martin Fowler",
-      isbn: "9784274224546",
-      totalPages: 480,
-      status: "READING",
+    expect(POST).toHaveBeenCalledWith("/api/books", {
+      body: {
+        title: "リファクタリング",
+        author: "Martin Fowler",
+        isbn: "9784274224546",
+        totalPages: 480,
+        status: "READING",
+      },
     });
   });
 
@@ -65,19 +86,23 @@ describe("createBookAction", () => {
       formData({ title: "t", author: "   ", totalPages: "" }),
     );
 
-    expect(createBook).toHaveBeenCalledWith({
-      title: "t",
-      author: undefined,
-      isbn: undefined,
-      totalPages: undefined,
-      status: undefined,
+    expect(POST).toHaveBeenCalledWith("/api/books", {
+      body: {
+        title: "t",
+        author: undefined,
+        isbn: undefined,
+        totalPages: undefined,
+        status: undefined,
+      },
     });
   });
 
   it("drops a status that is not one of the declared values", async () => {
     await createBookAction(initialBookFormState, formData({ title: "t", status: "NOPE" }));
 
-    expect(createBook).toHaveBeenCalledWith(expect.objectContaining({ status: undefined }));
+    expect(POST).toHaveBeenCalledWith("/api/books", {
+      body: expect.objectContaining({ status: undefined }),
+    });
   });
 
   it("rejects a non-integer page count without calling the API", async () => {
@@ -87,7 +112,7 @@ describe("createBookAction", () => {
     );
 
     expect(state).toEqual({ status: "error", message: "総ページ数は整数で入力してください。" });
-    expect(createBook).not.toHaveBeenCalled();
+    expect(POST).not.toHaveBeenCalled();
   });
 
   it("refreshes the list after a successful create", async () => {
@@ -97,8 +122,8 @@ describe("createBookAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
-  it("surfaces the API message and does not refresh when the create fails", async () => {
-    createBook.mockResolvedValue({ ok: false, message: "title: title is required" });
+  it("surfaces the backend's field error and does not refresh when the create fails", async () => {
+    POST.mockResolvedValue(fieldError("title", "title is required"));
 
     const state = await createBookAction(initialBookFormState, formData({ title: "" }));
 
@@ -108,11 +133,6 @@ describe("createBookAction", () => {
 });
 
 describe("updateBookAction", () => {
-  beforeEach(() => {
-    updateBook.mockReset().mockResolvedValue({ ok: true, book: {} });
-    revalidatePath.mockReset();
-  });
-
   it("sends the parsed fields to the bound book", async () => {
     await updateBookAction(
       7,
@@ -120,12 +140,9 @@ describe("updateBookAction", () => {
       formData({ title: " 新題 ", author: "", isbn: "123", totalPages: "10", status: "DONE" }),
     );
 
-    expect(updateBook).toHaveBeenCalledWith(7, {
-      title: "新題",
-      author: undefined,
-      isbn: "123",
-      totalPages: 10,
-      status: "DONE",
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}", {
+      params: { path: { id: 7 } },
+      body: { title: "新題", author: undefined, isbn: "123", totalPages: 10, status: "DONE" },
     });
   });
 
@@ -141,8 +158,8 @@ describe("updateBookAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/books/7");
   });
 
-  it("surfaces the API message and does not refresh when the update fails", async () => {
-    updateBook.mockResolvedValue({ ok: false, message: "status: status is required" });
+  it("surfaces the backend's field error and does not refresh when the update fails", async () => {
+    PUT.mockResolvedValue(fieldError("status", "status is required"));
 
     const state = await updateBookAction(7, initialBookFormState, formData({ title: "t" }));
 
@@ -158,20 +175,18 @@ describe("updateBookAction", () => {
     );
 
     expect(state).toEqual({ status: "error", message: "総ページ数は整数で入力してください。" });
-    expect(updateBook).not.toHaveBeenCalled();
+    expect(PUT).not.toHaveBeenCalled();
   });
 });
 
 describe("updateProgressAction", () => {
-  beforeEach(() => {
-    updateProgress.mockReset().mockResolvedValue({ ok: true, book: {} });
-    revalidatePath.mockReset();
-  });
-
-  it("sends the page as a number to the bound book", async () => {
+  it("sends the page as a number to the bound book's progress", async () => {
     await updateProgressAction(7, initialBookFormState, formData({ currentPage: " 120 " }));
 
-    expect(updateProgress).toHaveBeenCalledWith(7, 120);
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}/progress", {
+      params: { path: { id: 7 } },
+      body: { currentPage: 120 },
+    });
   });
 
   it("refreshes both the list and the book's page after recording", async () => {
@@ -192,40 +207,40 @@ describe("updateProgressAction", () => {
     const state = await updateProgressAction(7, initialBookFormState, formData({ currentPage }));
 
     expect(state).toEqual({ status: "error", message: "ページ数を整数で入力してください。" });
-    expect(updateProgress).not.toHaveBeenCalled();
+    expect(PUT).not.toHaveBeenCalled();
   });
 
-  it("surfaces the API message and does not refresh when recording fails", async () => {
-    updateProgress.mockResolvedValue({ ok: false, message: "範囲外" });
+  it("surfaces the backend's message and does not refresh when recording fails", async () => {
+    PUT.mockResolvedValue({ error: { detail: "currentPage must not exceed totalPages (300)" } });
 
     const state = await updateProgressAction(
       7,
       initialBookFormState,
-      formData({ currentPage: "9" }),
+      formData({ currentPage: "301" }),
     );
 
-    expect(state).toEqual({ status: "error", message: "範囲外" });
+    expect(state).toEqual({
+      status: "error",
+      message: "currentPage must not exceed totalPages (300)",
+    });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 
 describe("deleteBookAction", () => {
-  beforeEach(() => {
-    deleteBook.mockReset().mockResolvedValue({ ok: true });
-    revalidatePath.mockReset();
-    redirect.mockClear();
-  });
-
-  it("refreshes the list and redirects to it after a successful delete", async () => {
+  it("deletes the bound book, then refreshes the list and redirects to it", async () => {
     await expect(deleteBookAction(7)).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(deleteBook).toHaveBeenCalledWith(7);
+    expect(DELETE).toHaveBeenCalledWith("/api/books/{id}", { params: { path: { id: 7 } } });
     expect(revalidatePath).toHaveBeenCalledWith("/");
     expect(redirect).toHaveBeenCalledWith("/");
   });
 
   it("stays on the page and reports the failure when the delete fails", async () => {
-    deleteBook.mockResolvedValue({ ok: false, message: "book 7 not found" });
+    DELETE.mockResolvedValue({
+      error: { detail: "book 7 not found" },
+      response: { ok: false, status: 404 },
+    });
 
     expect(await deleteBookAction(7)).toEqual({ status: "error", message: "book 7 not found" });
     expect(redirect).not.toHaveBeenCalled();

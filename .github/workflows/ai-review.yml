@@ -53,6 +53,28 @@ jobs:
       - name: Test
         run: make test-backend
 
+      # テストの観点は frontend も見るので、frontend の lint（Prettier / ESLint / tsc）とテストも先に落とす。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        run: make lint-frontend
+
+      - name: Test frontend
+        run: make test-frontend
+
   ai-review:
     needs: static-checks
     runs-on: ubuntu-latest

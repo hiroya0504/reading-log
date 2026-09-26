@@ -30,7 +30,7 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 | --- | --- | --- | --- |
 | 規約準拠 | `review-detector-rules` | 本体 | `rules.md` のルール ID |
 | セキュリティ | `review-detector-security` | 本体 | `SECURITY` |
-| テスト | `review-detector-tests` | 本体とテスト | `test-rules.md` のルール ID。どれにも当たらないものは `TESTS` |
+| テスト | `review-detector-tests` | 本体とテスト（backend と frontend） | `test-rules.md` のルール ID。どれにも当たらないものは `TESTS` |
 
 ## モード
 
@@ -44,21 +44,23 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 - CIモード: `gh pr diff <PR NUMBER> --name-only` で変更ファイル一覧を取る。
 - ローカルモード: `git diff --name-only origin/main...HEAD` と `git diff --name-only`（未コミット分）を合わせる。
 
-変更ファイルから、次の 2 つの一覧を作る。どちらも、作業ツリーに存在するもの（削除されたファイルは除く）だけ。Glob で確かめる。
+変更ファイルから、次の 4 つの一覧を作る。どれも、作業ツリーに存在するもの（削除されたファイルは除く）だけ。Glob で確かめる。
 
 - **本体**: `backend/src/main/java/` 配下の `.java` ファイル
 - **テスト**: `backend/src/test/java/` 配下の `.java` ファイル
+- **frontend の本体**: `frontend/src/` 配下の `.ts` / `.tsx` ファイルのうち、`.test.ts` / `.test.tsx` でないもの。`frontend/src/lib/api/schema.d.ts`（生成物）は除く
+- **frontend のテスト**: `frontend/src/` 配下の `.test.ts` / `.test.tsx` ファイル
 
-自動生成コード（`build/`、`generated/` 配下）、フロントエンド、`.java` 以外のファイルはどちらにも入らない。
+自動生成コード（`build/`、`generated/` 配下、`schema.d.ts`）と、上のどれにも当たらないファイルはどの一覧にも入らない。
 
-本体もテストも 0 件なら、指摘0件として手順5へ進む。
+4 つとも 0 件なら、指摘0件として手順5へ進む。
 
 ### 2. 検出
 
 3 つの観点の検出役を、**すべて 1 つのメッセージで並列に**呼ぶ（Agent ツール。どれも `run_in_background: false`）。
 
-- 規約準拠とセキュリティ: 対象は**本体**。本体が 0 件なら呼ばない
-- テスト: 対象は**本体とテスト**。両方 0 件なら呼ばない
+- 規約準拠とセキュリティ: 対象は**本体**（backend だけ）。本体が 0 件なら呼ばない
+- テスト: 対象は**本体・テスト・frontend の本体・frontend のテスト**。4 つとも 0 件なら呼ばない
 - 対象ファイルが 8 個を超える観点は、ファイルを 8 個以下のグループに分けて、グループごとに 1 体呼ぶ
 
 以下、「観点 × グループ」の 1 回の呼び出しを **検出グループ** と呼ぶ。
