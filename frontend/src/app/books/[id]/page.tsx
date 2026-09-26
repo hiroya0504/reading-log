@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BookForm } from "../../BookForm";
 import { deleteBookAction, updateBookAction, updateProgressAction } from "../../actions";
 import { DeleteBookButton } from "./DeleteBookButton";
+import { parseBookId } from "./book-id";
 import { ProgressForm } from "./ProgressForm";
 import { getBook } from "@/lib/api/books";
 
@@ -10,13 +11,10 @@ import { getBook } from "@/lib/api/books";
 export const dynamic = "force-dynamic";
 
 export default async function BookPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rawId } = await params;
-  // `/^\d+$/` rather than `Number()` alone: `Number("")` is 0 and `Number("1e3")` is 1000, and
-  // neither is a URL anyone meant as a book id.
-  if (!/^\d+$/.test(rawId)) {
+  const id = parseBookId((await params).id);
+  if (id === undefined) {
     notFound();
   }
-  const id = Number(rawId);
 
   const result = await getBook(id);
   if (!result.ok && result.notFound) {
