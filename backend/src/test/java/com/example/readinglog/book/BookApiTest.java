@@ -15,6 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -319,6 +320,26 @@ class BookApiTest {
     ResponseEntity<JsonNode> wrongMethod =
         asDev().exchange("/api/books", HttpMethod.DELETE, null, JsonNode.class);
     assertProblemDetail(wrongMethod, HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED");
+  }
+
+  /**
+   * A non-numeric id fails to bind before any handler runs. It must come back as a client error,
+   * not fall through to the catch-all in {@code ProblemDetailsAdvice} as a 500 — the same risk
+   * {@link #unknownStatusValueIsRejected} guards for the body.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"GET", "PUT", "DELETE"})
+  void nonNumericIdIsRejected(String methodName) {
+    HttpMethod method = HttpMethod.valueOf(methodName);
+    HttpEntity<?> body =
+        method == HttpMethod.PUT
+            ? new HttpEntity<>(new BookUpdateRequest("t", null, null, null, BookStatus.READING))
+            : null;
+
+    ResponseEntity<JsonNode> response =
+        asDev().exchange("/api/books/abc", method, body, JsonNode.class);
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "BAD_REQUEST");
   }
 
   /** {@code limit} must reach the SQL. Hard-code it in the mapper and this is what fails. */
