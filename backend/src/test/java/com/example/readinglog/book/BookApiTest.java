@@ -738,6 +738,24 @@ class BookApiTest {
         .containsExactly("書名", "著者", "isbn", 300, BookStatus.READING);
   }
 
+  /**
+   * The bound is inclusive: the last page must be recordable. {@link
+   * #progressBeyondTotalPagesIsRejectedAndChangesNothing} alone would still pass if the guard
+   * turned into {@code <}.
+   */
+  @Test
+  void progressAtExactlyTotalPagesIsAccepted() {
+    BookResponse created = createWithPages(300);
+
+    ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 300);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("currentPage").asInt()).isEqualTo(300);
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isEqualTo(300);
+  }
+
   @Test
   void progressBeyondTotalPagesIsRejectedAndChangesNothing() {
     BookResponse created = createWithPages(300);
