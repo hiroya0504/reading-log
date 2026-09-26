@@ -1,6 +1,7 @@
 package com.example.readinglog.book;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
@@ -55,4 +56,50 @@ public interface BookMapper {
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
       @Param("status") BookStatus status);
+
+  /**
+   * Owner-scoped like {@link #findByUserId}: another user's id finds nothing, same as a missing
+   * one.
+   */
+  @Select(
+      """
+      SELECT id, user_id, title, author, isbn, total_pages, current_page,
+             status, rating, note, created_at, updated_at
+        FROM books
+       WHERE id = #{id} AND user_id = #{userId}
+      """)
+  Book findByIdAndUserId(@Param("id") long id, @Param("userId") long userId);
+
+  /**
+   * Full replacement of the fields a client may edit, returning the updated row — {@code null} when
+   * no row matched. Declared as {@code @Select} with {@code flushCache} for the reasons {@link
+   * #insert} documents.
+   *
+   * <p>{@code current_page} / {@code rating} / {@code note} are left alone: they belong to later
+   * milestones and have their own write paths there.
+   */
+  @Select(
+      """
+      UPDATE books
+         SET title = #{title}, author = #{author}, isbn = #{isbn},
+             total_pages = #{totalPages}, status = #{status}, updated_at = now()
+       WHERE id = #{id} AND user_id = #{userId}
+      RETURNING id, user_id, title, author, isbn, total_pages, current_page,
+                status, rating, note, created_at, updated_at
+      """)
+  @Options(flushCache = Options.FlushCachePolicy.TRUE)
+  Book update(
+      @Param("id") long id,
+      @Param("userId") long userId,
+      @Param("title") String title,
+      @Param("author") String author,
+      @Param("isbn") String isbn,
+      @Param("totalPages") Integer totalPages,
+      @Param("status") BookStatus status);
+
+  /**
+   * @return the number of rows deleted — 0 when the book is missing or not the caller's
+   */
+  @Delete("DELETE FROM books WHERE id = #{id} AND user_id = #{userId}")
+  int delete(@Param("id") long id, @Param("userId") long userId);
 }

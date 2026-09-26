@@ -135,6 +135,51 @@
         ],
         "type" : "object"
       },
+      "BookUpdateRequest" : {
+        "properties" : {
+          "author" : {
+            "description" : "著者名。省略すると消える。",
+            "example" : "山田太郎",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "isbn" : {
+            "description" : "ISBN。省略すると消える。形式は検証しない。",
+            "example" : "9784123456789",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "読書状態。必須。",
+            "enum" : [
+              "WANT_TO_READ",
+              "READING",
+              "DONE"
+            ],
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "書名。必須。",
+            "example" : "エラーハンドリング入門",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totalPages" : {
+            "description" : "総ページ数。1 以上。省略すると消える。",
+            "example" : 320,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "status",
+          "title"
+        ],
+        "type" : "object"
+      },
       "HealthResponse" : {
         "properties" : {
           "status" : {
@@ -232,6 +277,101 @@
           }
         },
         "summary" : "Register a book for the authenticated user.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
+    "/api/books/{id}" : {
+      "delete" : {
+        "operationId" : "deleteBook",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        },
+        "summary" : "Delete one of the authenticated user's books.",
+        "tags" : [
+          "book"
+        ]
+      },
+      "get" : {
+        "operationId" : "getBook",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get one of the authenticated user's books.",
+        "tags" : [
+          "book"
+        ]
+      },
+      "put" : {
+        "operationId" : "updateBook",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BookUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the editable fields of one of the authenticated user's books.",
         "tags" : [
           "book"
         ]

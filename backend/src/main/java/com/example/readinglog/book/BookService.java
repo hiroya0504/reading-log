@@ -1,6 +1,8 @@
 package com.example.readinglog.book;
 
 import com.example.readinglog.book.dto.BookCreateRequest;
+import com.example.readinglog.book.dto.BookUpdateRequest;
+import com.example.readinglog.common.error.NotFoundException;
 import com.example.readinglog.common.error.ValidationException;
 import com.example.readinglog.common.security.CurrentUser;
 import java.util.List;
@@ -55,5 +57,51 @@ public class BookService {
         request.isbn(),
         request.totalPages(),
         request.statusOrDefault());
+  }
+
+  /**
+   * Another user's book is reported exactly like a missing one — 404, not 403. A 403 would confirm
+   * that the id exists, which lets a caller probe for other users' books by counting.
+   */
+  @Transactional(readOnly = true)
+  public Book get(long id) {
+    Book book = bookMapper.findByIdAndUserId(id, currentUser.requireUserId().value());
+    if (book == null) {
+      throw notFound(id);
+    }
+    return book;
+  }
+
+  /** Not-found semantics as in {@link #get}. */
+  @Transactional
+  public Book update(long id, BookUpdateRequest request) {
+    Book book =
+        bookMapper.update(
+            id,
+            currentUser.requireUserId().value(),
+            request.title(),
+            request.author(),
+            request.isbn(),
+            request.totalPages(),
+            request.status());
+    if (book == null) {
+      throw notFound(id);
+    }
+    return book;
+  }
+
+  /**
+   * Not-found semantics as in {@link #get}. Deleting a missing book is a 404 rather than a silent
+   * success so a client that holds a stale id learns about it.
+   */
+  @Transactional
+  public void delete(long id) {
+    if (bookMapper.delete(id, currentUser.requireUserId().value()) == 0) {
+      throw notFound(id);
+    }
+  }
+
+  private static NotFoundException notFound(long id) {
+    return new NotFoundException("BOOK_NOT_FOUND", "book " + id + " not found");
   }
 }

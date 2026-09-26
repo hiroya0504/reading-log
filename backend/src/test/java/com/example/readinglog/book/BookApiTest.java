@@ -6,6 +6,7 @@ import com.example.readinglog.TestcontainersConfiguration;
 import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookResponse;
+import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -309,8 +310,7 @@ class BookApiTest {
    */
   @Test
   void errorCodeFollowsTheStatusRatherThanCollapsingTo400() {
-    ResponseEntity<JsonNode> notFound =
-        asDev().getForEntity("/api/books/does-not-exist", JsonNode.class);
+    ResponseEntity<JsonNode> notFound = asDev().getForEntity("/api/does-not-exist", JsonNode.class);
     assertProblemDetail(notFound, HttpStatus.NOT_FOUND, "NOT_FOUND");
 
     ResponseEntity<JsonNode> wrongMethod =
@@ -340,5 +340,249 @@ class BookApiTest {
         asDev().getForEntity("/api/books?limit=1&offset=1", BookListResponse.class).getBody();
 
     assertThat(body.items()).extracting(BookResponse::title).containsExactly("古い");
+  }
+
+  // --- Location on create ---
+
+  /** The Location must resolve: following it has to return the book that was just created. */
+  @Test
+  void createPointsLocationAtTheNewBook() {
+    ResponseEntity<BookResponse> response =
+        asDev()
+            .postForEntity(
+                "/api/books",
+                new BookCreateRequest("場所", null, null, null, null),
+                BookResponse.class);
+
+    assertThat(response.getHeaders().getLocation())
+        .hasToString("/api/books/" + response.getBody().id());
+    BookResponse followed =
+        asDev()
+            .getForEntity(response.getHeaders().getLocation().toString(), BookResponse.class)
+            .getBody();
+    assertThat(followed.title()).isEqualTo("場所");
+  }
+
+  // --- Read one ---
+
+  @Test
+  void getReturnsTheOwnersBook() {
+    BookResponse created = create(asDev(), "1 冊だけ");
+
+    ResponseEntity<BookResponse> response =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().title()).isEqualTo("1 冊だけ");
+  }
+
+  @Test
+  void getRequiresAuthentication() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<String> response =
+        restTemplate.getForEntity("/api/books/" + created.id(), String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void getOfAMissingBookIsNotFound() {
+    ResponseEntity<JsonNode> response = asDev().getForEntity("/api/books/999999", JsonNode.class);
+
+    assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+  }
+
+  /**
+   * Owner scoping on the by-id path. Must be the same 404 as a missing id — a 403 would confirm the
+   * id exists.
+   */
+  @Test
+  void getOfAnotherUsersBookIsNotFound() {
+    BookResponse devBook = create(asDev(), "dev の本");
+
+    ResponseEntity<JsonNode> response =
+        asOther().getForEntity("/api/books/" + devBook.id(), JsonNode.class);
+
+    assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+  }
+
+  // --- Update ---
+
+  private ResponseEntity<JsonNode> put(TestRestTemplate client, long id, Object body) {
+    return client.exchange(
+        "/api/books/" + id, HttpMethod.PUT, new HttpEntity<>(body), JsonNode.class);
+  }
+
+  /**
+   * Read back over GET, for the same reason {@link #storesAndReturnsEveryFieldTheClientSent} does.
+   */
+  @Test
+  void updateReplacesEveryEditableField() {
+    BookResponse created = create(asDev(), "旧題");
+
+    ResponseEntity<BookResponse> response =
+        asDev()
+            .exchange(
+                "/api/books/" + created.id(),
+                HttpMethod.PUT,
+                new HttpEntity<>(
+                    new BookUpdateRequest(
+                        "新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE)),
+                BookResponse.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read)
+        .extracting(
+            BookResponse::title,
+            BookResponse::author,
+            BookResponse::isbn,
+            BookResponse::totalPages,
+            BookResponse::status)
+        .containsExactly("新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE);
+    assertThat(read.createdAt()).isEqualTo(created.createdAt());
+    assertThat(read.updatedAt()).isAfter(created.updatedAt());
+  }
+
+  /** PUT is a full replacement: an omitted optional field is cleared, not kept. */
+  @Test
+  void updateClearsOmittedOptionalFields() {
+    ResponseEntity<BookResponse> created =
+        asDev()
+            .postForEntity(
+                "/api/books",
+                new BookCreateRequest("t", "著者", "isbn", 100, BookStatus.READING),
+                BookResponse.class);
+
+    put(
+        asDev(),
+        created.getBody().id(),
+        new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.getBody().id(), BookResponse.class).getBody();
+    assertThat(read.author()).isNull();
+    assertThat(read.isbn()).isNull();
+    assertThat(read.totalPages()).isNull();
+  }
+
+  /**
+   * Status is required rather than defaulted: defaulting would move a book being read back to
+   * WANT_TO_READ whenever a client forgot the field.
+   */
+  @Test
+  void updateWithoutStatusIsRejected() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<JsonNode> response =
+        put(asDev(), created.id(), new BookUpdateRequest("t", null, null, null, null));
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    assertThat(response.getBody().path("errors").get(0).path("field").asText()).isEqualTo("status");
+  }
+
+  @Test
+  void updateWithBlankTitleIsRejected() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<JsonNode> response =
+        put(
+            asDev(),
+            created.id(),
+            new BookUpdateRequest(" ", null, null, null, BookStatus.READING));
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    assertThat(response.getBody().path("errors").get(0).path("field").asText()).isEqualTo("title");
+  }
+
+  @Test
+  void updateOfAMissingBookIsNotFound() {
+    ResponseEntity<JsonNode> response =
+        put(asDev(), 999999, new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+
+    assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+  }
+
+  /** Owner scoping, update side: rejected as 404 and the row is left exactly as it was. */
+  @Test
+  void updateOfAnotherUsersBookIsNotFoundAndChangesNothing() {
+    BookResponse devBook = create(asDev(), "dev の本");
+
+    ResponseEntity<JsonNode> response =
+        put(
+            asOther(),
+            devBook.id(),
+            new BookUpdateRequest("乗っ取り", null, null, null, BookStatus.DONE));
+
+    assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + devBook.id(), BookResponse.class).getBody();
+    assertThat(read.title()).isEqualTo("dev の本");
+    assertThat(read.status()).isEqualTo(BookStatus.WANT_TO_READ);
+  }
+
+  @Test
+  void updateRequiresAuthentication() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            "/api/books/" + created.id(),
+            HttpMethod.PUT,
+            new HttpEntity<>(new BookUpdateRequest("x", null, null, null, BookStatus.READING)),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  // --- Delete ---
+
+  private ResponseEntity<JsonNode> delete(TestRestTemplate client, long id) {
+    return client.exchange("/api/books/" + id, HttpMethod.DELETE, null, JsonNode.class);
+  }
+
+  @Test
+  void deleteRemovesTheBook() {
+    BookResponse created = create(asDev(), "消す本");
+
+    ResponseEntity<JsonNode> response = delete(asDev(), created.id());
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    assertProblemDetail(
+        asDev().getForEntity("/api/books/" + created.id(), JsonNode.class),
+        HttpStatus.NOT_FOUND,
+        "BOOK_NOT_FOUND");
+  }
+
+  @Test
+  void deleteOfAMissingBookIsNotFound() {
+    assertProblemDetail(delete(asDev(), 999999), HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+  }
+
+  /** Owner scoping, delete side: rejected as 404 and the row survives. */
+  @Test
+  void deleteOfAnotherUsersBookIsNotFoundAndKeepsTheRow() {
+    BookResponse devBook = create(asDev(), "dev の本");
+
+    assertProblemDetail(delete(asOther(), devBook.id()), HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+
+    Integer rows =
+        jdbc.queryForObject("SELECT count(*) FROM books WHERE id = ?", Integer.class, devBook.id());
+    assertThat(rows).isEqualTo(1);
+  }
+
+  @Test
+  void deleteRequiresAuthentication() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<String> response =
+        restTemplate.exchange("/api/books/" + created.id(), HttpMethod.DELETE, null, String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    Integer rows =
+        jdbc.queryForObject("SELECT count(*) FROM books WHERE id = ?", Integer.class, created.id());
+    assertThat(rows).isEqualTo(1);
   }
 }
