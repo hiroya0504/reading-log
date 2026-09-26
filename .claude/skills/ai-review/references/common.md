@@ -10,7 +10,7 @@
 | --- | --- |
 | フォーマット（インデント、改行、import 順、未使用 import） | Spotless（`make lint-backend`）、Prettier と ESLint（`make lint-frontend`） |
 | 命名 | 人間のレビュー。`backend/CLAUDE.md` の命名規約 |
-| レイヤ依存（Controller → Service → Mapper の方向、acting user の渡し方） | 人間のレビュー。ArchUnit は MVP 期間中は導入しない（`CLAUDE.md`） |
+| レイヤ依存（Controller → Service → Mapper の方向、acting user の渡し方） | 人間のレビュー。ArchUnit は MVP 期間中は導入しない（`CLAUDE.md`）。**ただし外部 HTTP の呼び出しの置き場所と向きは `rules.md` の ARCH-001 で見る** |
 | 型の誤り（frontend） | `tsc`（`make lint-frontend`） |
 | テストの成否、カバレッジの数値 | `make test-backend` / `make test-frontend`（CI の static-checks ジョブ） |
 | API 契約と `docs/openapi.json` のずれ | `OpenApiSnapshotTest` |

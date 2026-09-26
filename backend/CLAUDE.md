@@ -16,7 +16,9 @@ com.example.readinglog/
 ├── config/           Spring の Config クラスのみ
 ├── health/           /api/health
 ├── user/             users テーブル / UserDetailsService
-└── book/             MVP の本体
+├── book/             MVP の本体
+├── booksearch/       本の検索（外部の書誌サービス）
+└── repository/http/  外部 API の client（機能のポートの実装）。API ごとにサブパッケージ
 ```
 
 新しい機能は新パッケージに Controller / Service / Mapper / DTO をまとめる。
@@ -49,6 +51,23 @@ com.example.readinglog/
 - 1 ファイルの公開型は 1 つ。サフィックスが示す役割以外の仕事をさせない。
 
 **ArchUnit による強制はしていない**（MVP 期間中は意図的に入れない）。規約はこの記述のみ。
+
+## 外部 API（HTTP）の呼び出し
+
+外部に HTTP を送るコードは **`repository/http/<API 名>/` にだけ**置く（例: `repository/http/googlebooks/GoogleBooksClient`）。AI レビューの ARCH-001 で見る。
+
+```
+booksearch/BookSearchService ──▶ booksearch/BookCatalog（ポート）
+                                        ▲ implements
+                     repository/http/googlebooks/GoogleBooksClient ──▶ Google Books
+```
+
+- **機能パッケージがポート（interface）と、その戻り値の型を持つ。** Service はポートだけを注入する。機能パッケージは `repository.http` を import しない。
+- **client はポートを実装し、機能の型で答える。** 外部 API の DTO は client の中の非公開の record に閉じる。失敗は `common/error/` の例外（`BadGatewayException` など）に翻訳する。
+- 依存の向きは `repository.http` → 機能パッケージ（ポートを実装するため）だけ。client は、自分が実装するポートの機能以外を参照しない。
+- 接続先・キー・タイムアウトは `<API 名>Properties`（`@ConfigurationProperties`）で client の隣に置く。秘密は `backend/.env`（git の対象外）から読む。
+- テストは外部に繋がず、偽のサーバー（例: `FakeGoogleBooks`）に向ける。外部 API はアプリの外の依存なので、古典派でもモックにしてよい。
+- DB（MyBatis の Mapper）は今までどおり機能パッケージに置く。`repository/db` は作らない（必要になったら決める）。
 
 ## 命名
 

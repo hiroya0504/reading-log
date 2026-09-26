@@ -13,6 +13,7 @@
 | --- | --- |
 | DEF | コード欠陥。実行時に意図と違う動作をする |
 | SEC | セキュリティ。攻撃者が悪用できる |
+| ARCH | アーキテクチャ。コードの置き場所と依存の向き。`backend/CLAUDE.md` に書いた規約のうち、機械的に判定できるものだけを置く |
 | PERF | パフォーマンス。**MVP 期間中はルールを置かない**（`common.md` の「対象外」）。次元だけ予約しておく |
 
 ---
@@ -104,3 +105,28 @@
 ### 修正案の例
 
 値を `#{}` に変える。`ORDER BY` の列名のように `#{}` にできない値は、`enum` やホワイトリストで検証してから `${}` に渡す。
+
+---
+
+## ARCH-001 外部 HTTP の呼び出しが `repository.http` の外にある
+
+- **重要度**: medium
+- **背景**: 外部 API の呼び出しは `com.example.readinglog.repository.http` の配下に集める（`backend/CLAUDE.md` の「外部 API（HTTP）の呼び出し」）。client は機能側のポート（interface）を実装し、機能の型で答える。外部 API の応答の形と失敗の扱い（ステータスコード、タイムアウト）が機能のコードに漏れると、API の変更や差し替えのたびに Service まで直すことになり、Service のテストも HTTP を相手にしなければならなくなる。
+
+### 指摘すること
+
+- `repository.http` の外（機能パッケージ、`common/`、`config/`）の本体のコードで、外部に HTTP のリクエストを送っている場合。対象は `RestClient` / `RestTemplate` / `WebClient` の `get()` / `post()` / `exchange()` などの呼び出し、`java.net.http.HttpClient`、`HttpURLConnection` / `URL#openConnection`、OkHttp などの HTTP クライアント。
+- 機能パッケージのコードが `repository.http` の型を import している場合。機能はポートの interface だけを見る。
+- `repository.http` の client の `public` メソッドが、外部 API の形の型（その API の応答をそのまま写した record など）を返している、または外部 API の失敗を表す例外（`RestClientException` など）をそのまま外に投げている場合。
+
+### 指摘しないこと
+
+- テストコード（偽の外部サーバー、`TestRestTemplate` など）。
+- `repository.http` の client が、自分が実装するポートの機能パッケージの型（ポートの interface と、その戻り値の型）を import していること。依存の向きとして正しい。
+- `config/` で `RestClient.Builder` などの Bean を定義しているだけで、リクエストを送っていない場合。
+- `common/error/` の例外（`BadGatewayException` など）に翻訳して投げている場合。
+- 自分自身のアプリへの呼び出しではない、ライブラリ内部の通信（springdoc、Actuator など）。
+
+### 修正案の例
+
+機能パッケージにポート（`BookCatalog` のような interface）を置き、`repository/http/<外部 API 名>/` に、それを実装する `<外部 API 名>Client` を作る。外部 API の DTO は client の中の private / package-private な record にし、失敗は `common/error/` の例外に翻訳する。Service はポートだけを注入して使う。

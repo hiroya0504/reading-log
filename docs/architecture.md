@@ -80,7 +80,7 @@ gh api repos/<owner>/reading-log/rules/branches/main --jq '.[].type'
 
 ## 外部 API（Google Books）
 
-本の検索（`GET /api/book-search`）は backend の `booksearch` パッケージから Google Books API を呼ぶ。frontend は Google を直接呼ばない（キーをブラウザに出さず、応答の形を OpenAPI の契約に載せるため）。
+本の検索（`GET /api/book-search`）は backend の `booksearch` パッケージのポート（`BookCatalog`）を通して Google Books API を呼ぶ。呼び出す client は `repository/http/googlebooks/GoogleBooksClient`（外部 API の置き場所の規約は `backend/CLAUDE.md`）。frontend は Google を直接呼ばない（キーをブラウザに出さず、応答の形を OpenAPI の契約に載せるため）。
 
 - **API キーが実質必須。** キーなしのリクエストは全利用者で共有する枠に数えられ、ほぼ常に 1 日の上限に達している（429）。
   Books API は無料で、課金アカウントも要らない（1 プロジェクトあたり 1 日およそ 1,000 リクエスト）。
