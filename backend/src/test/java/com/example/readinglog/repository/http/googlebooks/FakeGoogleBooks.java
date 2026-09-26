@@ -1,4 +1,4 @@
-package com.example.readinglog.booksearch;
+package com.example.readinglog.repository.http.googlebooks;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -15,14 +15,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * talk to this instead of the network (test-rules.md, "土台"). It answers every request with the
  * status and body set last, and records the request URIs.
  */
-final class FakeGoogleBooks implements AutoCloseable {
+public final class FakeGoogleBooks implements AutoCloseable {
 
   private final HttpServer server;
   private final List<URI> requests = new CopyOnWriteArrayList<>();
   private volatile int status = 200;
   private volatile String body = "{}";
 
-  FakeGoogleBooks() {
+  public FakeGoogleBooks() {
     try {
       server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
     } catch (IOException e) {
@@ -42,17 +42,17 @@ final class FakeGoogleBooks implements AutoCloseable {
     server.start();
   }
 
-  String baseUrl() {
+  public String baseUrl() {
     return "http://localhost:" + server.getAddress().getPort();
   }
 
-  void answer(int status, String body) {
+  public void answer(int status, String body) {
     this.status = status;
     this.body = body;
     requests.clear();
   }
 
-  List<URI> requests() {
+  public List<URI> requests() {
     return requests;
   }
 

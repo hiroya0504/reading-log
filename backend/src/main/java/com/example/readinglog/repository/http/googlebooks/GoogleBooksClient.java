@@ -1,5 +1,7 @@
-package com.example.readinglog.booksearch;
+package com.example.readinglog.repository.http.googlebooks;
 
+import com.example.readinglog.booksearch.BookCandidate;
+import com.example.readinglog.booksearch.BookCatalog;
 import com.example.readinglog.common.error.BadGatewayException;
 import com.example.readinglog.common.error.ServiceUnavailableException;
 import java.util.List;
@@ -15,25 +17,31 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * {@link BookCatalog} over the Google Books API ({@code GET /volumes?q=}). Keeps Google's response
- * shape inside this class: nothing outside sees {@code volumeInfo} or {@code industryIdentifiers}.
+ * {@link BookCatalog} over the Google Books API ({@code GET /volumes?q=}).
+ *
+ * <p>Follows the rule for external HTTP calls (backend/CLAUDE.md, ARCH-001): it answers in the
+ * feature's own types, so Google's response shape ({@code volumeInfo}, {@code industryIdentifiers})
+ * and its failures (status codes, timeouts) stay inside this package.
  */
 @Component
-public class GoogleBooksCatalog implements BookCatalog {
+public class GoogleBooksClient implements BookCatalog {
 
-  private static final Logger log = LoggerFactory.getLogger(GoogleBooksCatalog.class);
+  private static final Logger log = LoggerFactory.getLogger(GoogleBooksClient.class);
 
   /** Enough to pick from without scrolling; the catalog's own maximum is 40. */
   static final int MAX_RESULTS = 10;
 
-  /** Mirrors {@code CoverUrls} in the book feature, which this package may not import. */
+  /**
+   * Mirrors {@code CoverUrls} in the book feature. Not imported: this client implements the book
+   * search's port and depends on that feature only.
+   */
   private static final Pattern COVER_HOST =
       Pattern.compile("^https://(books\\.google\\.com|books\\.googleusercontent\\.com)/.*$");
 
   private final RestClient restClient;
   private final String apiKey;
 
-  public GoogleBooksCatalog(RestClient.Builder builder, GoogleBooksProperties properties) {
+  public GoogleBooksClient(RestClient.Builder builder, GoogleBooksProperties properties) {
     SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
     requestFactory.setConnectTimeout(properties.timeout());
     requestFactory.setReadTimeout(properties.timeout());
@@ -81,7 +89,7 @@ public class GoogleBooksCatalog implements BookCatalog {
         .map(Volume::volumeInfo)
         .filter(Objects::nonNull)
         .filter(info -> info.title() != null && !info.title().isBlank())
-        .map(GoogleBooksCatalog::toCandidate)
+        .map(GoogleBooksClient::toCandidate)
         .toList();
   }
 

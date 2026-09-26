@@ -1,4 +1,4 @@
-package com.example.readinglog.booksearch;
+package com.example.readinglog.repository.http.googlebooks;
 
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;

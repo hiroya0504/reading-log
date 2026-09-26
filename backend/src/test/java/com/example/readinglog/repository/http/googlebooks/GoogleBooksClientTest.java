@@ -1,8 +1,9 @@
-package com.example.readinglog.booksearch;
+package com.example.readinglog.repository.http.googlebooks;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.readinglog.booksearch.BookCandidate;
 import com.example.readinglog.common.error.BadGatewayException;
 import com.example.readinglog.common.error.ServiceUnavailableException;
 import java.time.Duration;
@@ -17,7 +18,7 @@ import org.springframework.web.client.RestClient;
  * The translation from Google's volume shape to {@link BookCandidate}, against {@link
  * FakeGoogleBooks}. No Spring context: the catalog is built directly, as the app builds it.
  */
-class GoogleBooksCatalogTest {
+class GoogleBooksClientTest {
 
   private static final FakeGoogleBooks google = new FakeGoogleBooks();
 
@@ -26,8 +27,8 @@ class GoogleBooksCatalogTest {
     google.close();
   }
 
-  private static GoogleBooksCatalog catalog(String apiKey) {
-    return new GoogleBooksCatalog(
+  private static GoogleBooksClient catalog(String apiKey) {
+    return new GoogleBooksClient(
         RestClient.builder(),
         new GoogleBooksProperties(google.baseUrl(), apiKey, Duration.ofSeconds(2)));
   }

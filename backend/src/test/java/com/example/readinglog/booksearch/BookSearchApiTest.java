@@ -3,6 +3,7 @@ package com.example.readinglog.booksearch;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.readinglog.TestcontainersConfiguration;
+import com.example.readinglog.repository.http.googlebooks.FakeGoogleBooks;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * {@code GET /api/book-search} over HTTP, with Google Books replaced by {@link FakeGoogleBooks}.
- * How Google's answer is read is covered in {@link GoogleBooksCatalogTest}; this class covers what
+ * How Google's answer is read is covered in {@code GoogleBooksClientTest}; this class covers what
  * the endpoint adds on top: authentication, the query rules and the error responses.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
