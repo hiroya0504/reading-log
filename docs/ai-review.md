@@ -98,10 +98,12 @@ outdated は、行が変更されたことを示すだけで、指摘を受け�
 
 ## セットアップ
 
-1. リポジトリの Secrets に `ANTHROPIC_API_KEY` を登録する。
-2. Claude GitHub App をインストールする（`/install-github-app`、または https://github.com/apps/claude ）。このワークフローは `github_token` に `GITHUB_TOKEN` を渡しているので、App が無くても動く。
-3. `ai-review` ラベルを作る（`gh label create ai-review`）。
-4. 推奨: `CODEOWNERS` で `.claude/` と `.github/` を保護する。上書きの仕組みは「その PR 自身」にしか効かないため、ルールの変更そのものは人間がレビューする必要がある。
+1. Claude Code で `/install-github-app` を実行する。Claude GitHub App がインストールされ、Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が登録される。
+   - このワークフローは `github_token` に `GITHUB_TOKEN` を渡しているので、App そのものが無くても動く。必要なのはトークンの Secret。
+   - API キーの従量課金にする場合は、`ANTHROPIC_API_KEY` を登録し、`ai-review.yml` のコメントに従って差し替える。
+   - インストーラーは `claude.yml`（@claude で呼ぶ汎用アシスタント）と `claude-code-review.yml`（全 PR の自動レビュー）を追加するブランチも作る。**`claude-code-review.yml` はこの AI レビューと役割が重なるので入れない。**
+2. `ai-review` ラベルを作る（`gh label create ai-review`）。
+3. 推奨: `CODEOWNERS` で `.claude/` と `.github/` を保護する。上書きの仕組みは「その PR 自身」にしか効かないため、ルールの変更そのものは人間がレビューする必要がある。
 
 Bedrock / Vertex AI に切り替える場合は、`ai-review.yml` のコメントを参照。
 

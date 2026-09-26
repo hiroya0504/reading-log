@@ -106,8 +106,12 @@ jobs:
           # detector が `gh pr diff` を使う。このジョブのトークンは読み取り専用。
           GH_TOKEN: ${{ github.token }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Amazon Bedrock / Google Vertex AI 経由にする場合は、anthropic_api_key の代わりに
+          # Claude GitHub App のインストーラー（/install-github-app）が登録する OAuth トークン
+          # （Pro / Max のサブスクリプション）。API キーの従量課金にする場合は、この行を
+          #   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # に差し替える。
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Amazon Bedrock / Google Vertex AI 経由にする場合は、上のトークンの代わりに
           #   use_bedrock: "true"   （または use_vertex: "true"）
           # を指定し、aws-actions/configure-aws-credentials（または google-github-actions/auth）の
           # ステップをこの前に置く。どちらも OIDC を使うので、ジョブの permissions に
