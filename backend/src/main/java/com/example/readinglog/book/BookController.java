@@ -2,6 +2,7 @@ package com.example.readinglog.book;
 
 import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
+import com.example.readinglog.book.dto.BookProgressUpdateRequest;
 import com.example.readinglog.book.dto.BookResponse;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -81,6 +82,15 @@ public class BookController {
   @PutMapping("/books/{id}")
   public BookResponse update(@PathVariable long id, @Valid @RequestBody BookUpdateRequest request) {
     return BookResponse.from(bookService.update(id, request));
+  }
+
+  @Operation(
+      operationId = "updateBookProgress",
+      summary = "Record the page the authenticated user has read up to in one of their books.")
+  @PutMapping("/books/{id}/progress")
+  public BookResponse updateProgress(
+      @PathVariable long id, @Valid @RequestBody BookProgressUpdateRequest request) {
+    return BookResponse.from(bookService.updateProgress(id, request));
   }
 
   @Operation(operationId = "deleteBook", summary = "Delete one of the authenticated user's books.")

@@ -41,6 +41,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/books/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record the page the authenticated user has read up to in one of their books. */
+        put: operations["updateBookProgress"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -93,6 +110,14 @@ export interface components {
         BookListResponse: {
             /** @description 登録日時の新しい順。 */
             items: components["schemas"]["BookResponse"][];
+        };
+        BookProgressUpdateRequest: {
+            /**
+             * Format: int32
+             * @description 今読んでいるページ。0 以上で、総ページ数があればそれ以下。必須。
+             * @example 120
+             */
+            currentPage: number;
         };
         BookResponse: {
             /**
@@ -310,6 +335,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    updateBookProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookProgressUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BookResponse"];
+                };
             };
         };
     };

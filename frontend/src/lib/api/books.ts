@@ -171,6 +171,26 @@ export async function updateBook(id: number, input: BookUpdateInput): Promise<Up
   }
 }
 
+/**
+ * Separate from `updateBook` so recording a page does not resend — and risk clearing — the
+ * bibliographic fields. A page beyond `totalPages` comes back as a failure with the backend's
+ * message.
+ */
+export async function updateProgress(id: number, currentPage: number): Promise<UpdateBookResult> {
+  try {
+    const { data, error } = await api.PUT("/api/books/{id}/progress", {
+      params: { path: { id } },
+      body: { currentPage },
+    });
+    if (error || !data) {
+      return { ok: false, message: problemMessage(error, "進捗を記録できませんでした。") };
+    }
+    return { ok: true, book: toBook(data) };
+  } catch {
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
 export type DeleteBookResult = { ok: true } | { ok: false; message: string };
 
 /**

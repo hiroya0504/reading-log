@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookForm } from "../../BookForm";
-import { deleteBookAction, updateBookAction } from "../../actions";
+import { deleteBookAction, updateBookAction, updateProgressAction } from "../../actions";
 import { DeleteBookButton } from "./DeleteBookButton";
+import { ProgressForm } from "./ProgressForm";
 import { getBook } from "@/lib/api/books";
 
 // Rendered per request for the same reason as the home page: it reads from the backend.
@@ -33,6 +34,8 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
 
       {result.ok ? (
         <>
+          {/* Above the edit form: recording the page is what this screen is opened for most. */}
+          <ProgressForm action={updateProgressAction.bind(null, id)} book={result.book} />
           <BookForm
             action={updateBookAction.bind(null, id)}
             initial={result.book}

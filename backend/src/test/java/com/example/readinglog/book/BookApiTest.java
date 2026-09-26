@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.readinglog.TestcontainersConfiguration;
 import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
+import com.example.readinglog.book.dto.BookProgressUpdateRequest;
 import com.example.readinglog.book.dto.BookResponse;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -490,7 +491,7 @@ class BookApiTest {
   @Test
   void updateLeavesProgressRatingAndNoteAlone() {
     BookResponse created = create(asDev(), "t");
-    // No API writes these columns yet, so the fixture goes in directly.
+    // Set directly so the fixture does not depend on the progress API it is contrasted with.
     jdbc.update(
         "UPDATE books SET current_page = ?, rating = ?, note = ? WHERE id = ?",
         42,
@@ -634,6 +635,212 @@ class BookApiTest {
             String.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  /**
+   * The progress endpoint refuses a page beyond {@code totalPages}; without the same guard here,
+   * editing the total down would reach that state by the back door and the progress bar would pass
+   * 100%.
+   */
+  @Test
+  void updateShrinkingTotalPagesBelowTheRecordedPageIsRejectedAndChangesNothing() {
+    BookResponse created = createWithPages(100);
+    progress(asDev(), created.id(), 80);
+
+    ResponseEntity<JsonNode> response =
+        put(asDev(), created.id(), new BookUpdateRequest("新題", null, null, 50, BookStatus.DONE));
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read)
+        .extracting(BookResponse::title, BookResponse::totalPages, BookResponse::currentPage)
+        .containsExactly("t", 100, 80);
+  }
+
+  /** The bound is inclusive, and clearing the total removes it. */
+  @ParameterizedTest
+  @ValueSource(ints = {80, 0})
+  void updateAllowsTotalPagesAtTheRecordedPageOrCleared(int totalPages) {
+    BookResponse created = createWithPages(100);
+    progress(asDev(), created.id(), 80);
+    Integer newTotal = totalPages == 0 ? null : totalPages;
+
+    ResponseEntity<JsonNode> response =
+        put(
+            asDev(),
+            created.id(),
+            new BookUpdateRequest("t", null, null, newTotal, BookStatus.READING));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("currentPage").asInt()).isEqualTo(80);
+    assertThat(response.getBody().path("totalPages").isNull()).isEqualTo(newTotal == null);
+  }
+
+  // --- Progress ---
+
+  private ResponseEntity<JsonNode> progress(TestRestTemplate client, long id, Object body) {
+    return client.exchange(
+        "/api/books/" + id + "/progress", HttpMethod.PUT, new HttpEntity<>(body), JsonNode.class);
+  }
+
+  private ResponseEntity<JsonNode> progress(TestRestTemplate client, long id, int currentPage) {
+    return progress(client, id, new BookProgressUpdateRequest(currentPage));
+  }
+
+  private BookResponse createWithPages(int totalPages) {
+    return asDev()
+        .postForEntity(
+            "/api/books",
+            new BookCreateRequest("t", null, null, totalPages, BookStatus.READING),
+            BookResponse.class)
+        .getBody();
+  }
+
+  /** Read back over GET as well, for the reason updateReplacesEveryEditableField gives. */
+  @Test
+  void progressRecordsThePage() {
+    BookResponse created = createWithPages(300);
+
+    ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 120);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("currentPage").asInt()).isEqualTo(120);
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isEqualTo(120);
+  }
+
+  /**
+   * Only the page moves. Reaching the last page does not mark the book done, and the bibliographic
+   * fields are not touched.
+   */
+  @Test
+  void progressLeavesEverythingElseAlone() {
+    ResponseEntity<BookResponse> created =
+        asDev()
+            .postForEntity(
+                "/api/books",
+                new BookCreateRequest("書名", "著者", "isbn", 300, BookStatus.READING),
+                BookResponse.class);
+
+    progress(asDev(), created.getBody().id(), 300);
+
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.getBody().id(), BookResponse.class).getBody();
+    assertThat(read)
+        .extracting(
+            BookResponse::title,
+            BookResponse::author,
+            BookResponse::isbn,
+            BookResponse::totalPages,
+            BookResponse::status)
+        .containsExactly("書名", "著者", "isbn", 300, BookStatus.READING);
+  }
+
+  /**
+   * The bound is inclusive: the last page must be recordable. {@link
+   * #progressBeyondTotalPagesIsRejectedAndChangesNothing} alone would still pass if the guard
+   * turned into {@code <}.
+   */
+  @Test
+  void progressAtExactlyTotalPagesIsAccepted() {
+    BookResponse created = createWithPages(300);
+
+    ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 300);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("currentPage").asInt()).isEqualTo(300);
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isEqualTo(300);
+  }
+
+  @Test
+  void progressBeyondTotalPagesIsRejectedAndChangesNothing() {
+    BookResponse created = createWithPages(300);
+    progress(asDev(), created.id(), 100);
+
+    ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 301);
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isEqualTo(100);
+  }
+
+  /** Without a total there is nothing to measure against, so any non-negative page is accepted. */
+  @Test
+  void progressWithoutTotalPagesHasNoUpperBound() {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 5000);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().path("currentPage").asInt()).isEqualTo(5000);
+  }
+
+  /**
+   * Without the bean validation these would still fail — on the NOT NULL / CHECK constraints — but
+   * as a 500 instead of a 400 naming the field.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"{}", "{\"currentPage\": null}", "{\"currentPage\": -1}"})
+  void progressWithAnInvalidPageIsRejected(String body) {
+    BookResponse created = create(asDev(), "t");
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    ResponseEntity<JsonNode> response =
+        asDev()
+            .exchange(
+                "/api/books/" + created.id() + "/progress",
+                HttpMethod.PUT,
+                new HttpEntity<>(body, headers),
+                JsonNode.class);
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    assertThat(response.getBody().path("errors").get(0).path("field").asText())
+        .isEqualTo("currentPage");
+  }
+
+  @Test
+  void progressOfAMissingBookIsNotFound() {
+    assertProblemDetail(progress(asDev(), 999999, 1), HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+  }
+
+  /**
+   * Owner scoping, progress side. Also checks that the not-found branch wins over the bound check:
+   * reporting "exceeds totalPages" for someone else's book would confirm that it exists.
+   */
+  @ParameterizedTest
+  @ValueSource(ints = {10, 999})
+  void progressOfAnotherUsersBookIsNotFoundAndChangesNothing(int currentPage) {
+    BookResponse devBook = createWithPages(300);
+
+    assertProblemDetail(
+        progress(asOther(), devBook.id(), currentPage), HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
+
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + devBook.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isZero();
+  }
+
+  @Test
+  void progressRequiresAuthentication() {
+    BookResponse created = createWithPages(300);
+
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            "/api/books/" + created.id() + "/progress",
+            HttpMethod.PUT,
+            new HttpEntity<>(new BookProgressUpdateRequest(10)),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read.currentPage()).isZero();
   }
 
   // --- Delete ---

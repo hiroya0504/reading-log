@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createBook = vi.fn();
 const updateBook = vi.fn();
 const deleteBook = vi.fn();
+const updateProgress = vi.fn();
 const revalidatePath = vi.fn();
 // The real `redirect` throws to abort rendering; the stub does the same so code after it is proven
 // unreachable rather than merely unexercised.
@@ -14,11 +15,13 @@ vi.mock("@/lib/api/books", () => ({
   createBook: (...args: unknown[]) => createBook(...args),
   updateBook: (...args: unknown[]) => updateBook(...args),
   deleteBook: (...args: unknown[]) => deleteBook(...args),
+  updateProgress: (...args: unknown[]) => updateProgress(...args),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => redirect(path) }));
 
-const { createBookAction, updateBookAction, deleteBookAction } = await import("./actions");
+const { createBookAction, updateBookAction, updateProgressAction, deleteBookAction } =
+  await import("./actions");
 const { initialBookFormState } = await import("./book-form-state");
 
 function formData(fields: Record<string, string>) {
@@ -156,6 +159,53 @@ describe("updateBookAction", () => {
 
     expect(state).toEqual({ status: "error", message: "総ページ数は整数で入力してください。" });
     expect(updateBook).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateProgressAction", () => {
+  beforeEach(() => {
+    updateProgress.mockReset().mockResolvedValue({ ok: true, book: {} });
+    revalidatePath.mockReset();
+  });
+
+  it("sends the page as a number to the bound book", async () => {
+    await updateProgressAction(7, initialBookFormState, formData({ currentPage: " 120 " }));
+
+    expect(updateProgress).toHaveBeenCalledWith(7, 120);
+  });
+
+  it("refreshes both the list and the book's page after recording", async () => {
+    const state = await updateProgressAction(
+      7,
+      initialBookFormState,
+      formData({ currentPage: "1" }),
+    );
+
+    expect(state).toEqual({ status: "success" });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).toHaveBeenCalledWith("/books/7");
+  });
+
+  // `Number("")` is 0: without the blank check, clearing the field and pressing the button would
+  // rewind the book to the first page.
+  it.each(["", "  ", "12.5", "abc"])("rejects %j without calling the API", async (currentPage) => {
+    const state = await updateProgressAction(7, initialBookFormState, formData({ currentPage }));
+
+    expect(state).toEqual({ status: "error", message: "ページ数を整数で入力してください。" });
+    expect(updateProgress).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the API message and does not refresh when recording fails", async () => {
+    updateProgress.mockResolvedValue({ ok: false, message: "範囲外" });
+
+    const state = await updateProgressAction(
+      7,
+      initialBookFormState,
+      formData({ currentPage: "9" }),
+    );
+
+    expect(state).toEqual({ status: "error", message: "範囲外" });
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 

@@ -16,7 +16,8 @@ vi.mock("./client", () => ({
   },
 }));
 
-const { listBooks, createBook, getBook, updateBook, deleteBook } = await import("./books");
+const { listBooks, createBook, getBook, updateBook, updateProgress, deleteBook } =
+  await import("./books");
 
 const RAW = {
   id: 7,
@@ -273,6 +274,51 @@ describe("updateBook", () => {
     PUT.mockRejectedValue(new Error("ECONNREFUSED"));
 
     expect(await updateBook(7, { title: "t", status: "READING" })).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+});
+
+describe("updateProgress", () => {
+  beforeEach(() => {
+    PUT.mockReset();
+  });
+
+  it("sends only the page to the book's progress path", async () => {
+    PUT.mockResolvedValue({ data: { ...RAW, currentPage: 120 } });
+
+    const result = await updateProgress(7, 120);
+
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}/progress", {
+      params: { path: { id: 7 } },
+      body: { currentPage: 120 },
+    });
+    expect(result).toEqual({ ok: true, book: expect.objectContaining({ currentPage: 120 }) });
+  });
+
+  it("surfaces the backend's message", async () => {
+    PUT.mockResolvedValue({ error: { detail: "currentPage must not exceed totalPages (480)" } });
+
+    expect(await updateProgress(7, 999)).toEqual({
+      ok: false,
+      message: "currentPage must not exceed totalPages (480)",
+    });
+  });
+
+  it("reports a bodyless failure as a failed record", async () => {
+    PUT.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await updateProgress(7, 1)).toEqual({
+      ok: false,
+      message: "進捗を記録できませんでした。",
+    });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    PUT.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await updateProgress(7, 1)).toEqual({
       ok: false,
       message: "バックエンドに接続できませんでした。",
     });

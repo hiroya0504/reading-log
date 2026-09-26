@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createBook, deleteBook, updateBook, type BookStatus } from "@/lib/api/books";
+import {
+  createBook,
+  deleteBook,
+  updateBook,
+  updateProgress,
+  type BookStatus,
+} from "@/lib/api/books";
 import type { BookFormState } from "./book-form-state";
 
 const STATUSES: BookStatus[] = ["WANT_TO_READ", "READING", "DONE"];
@@ -95,6 +101,32 @@ export async function updateBookAction(
 
   const { status, ...rest } = parsed.input;
   const result = await updateBook(id, { ...rest, status: status as BookStatus });
+  if (!result.ok) {
+    return { status: "error", message: result.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/books/${id}`);
+  return { status: "success" };
+}
+
+/**
+ * Bound to a book id like {@link updateBookAction}. As in `parseBookForm`, only what the backend
+ * cannot see is checked here — a blank or non-integer entry never becomes a number to send. The
+ * range (0 to `totalPages`) is the backend's rule.
+ */
+export async function updateProgressAction(
+  id: number,
+  _previous: BookFormState,
+  formData: FormData,
+): Promise<BookFormState> {
+  const raw = optionalText(formData.get("currentPage"));
+  const currentPage = raw === undefined ? NaN : Number(raw);
+  if (!Number.isInteger(currentPage)) {
+    return { status: "error", message: "ページ数を整数で入力してください。" };
+  }
+
+  const result = await updateProgress(id, currentPage);
   if (!result.ok) {
     return { status: "error", message: result.message };
   }
