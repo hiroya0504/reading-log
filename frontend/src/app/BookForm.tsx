@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import type { Book } from "@/lib/api/books";
 import { initialBookFormState, type BookFormState } from "./book-form-state";
+import { STATUS_FLOW, STATUS_LABELS } from "./ui/status";
+import { buttonPrimary, card, fieldInput, fieldLabel } from "./ui/styles";
 
 export type BookFormAction = (
   previous: BookFormState,
@@ -38,68 +40,70 @@ export function BookForm({
   const [state, formAction, pending] = useActionState(action, initialBookFormState);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-md border p-4">
-      <label className="flex flex-col gap-1 text-sm">
+    <form action={formAction} className={`${card} flex flex-col gap-5 p-6 sm:p-8`}>
+      <label className={fieldLabel}>
         書名
         <input
           name="title"
           type="text"
           defaultValue={initial?.title}
-          className="rounded border px-2 py-1"
+          className={fieldInput}
           placeholder="エラーハンドリング入門"
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
+      <label className={fieldLabel}>
         著者
         <input
           name="author"
           type="text"
           defaultValue={initial?.author ?? undefined}
-          className="rounded border px-2 py-1"
+          className={fieldInput}
         />
       </label>
 
       {/* Present on the create form too, not just edit: the update replaces every field, so a
           value only one of the two forms could enter would be wiped by the other. */}
-      <label className="flex flex-col gap-1 text-sm">
+      <label className={fieldLabel}>
         ISBN
         <input
           name="isbn"
           type="text"
           defaultValue={initial?.isbn ?? undefined}
-          className="rounded border px-2 py-1"
+          className={fieldInput}
         />
       </label>
 
-      <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+      <div className="flex flex-wrap gap-4">
+        <label className={`${fieldLabel} flex-1`}>
           総ページ数
           <input
             name="totalPages"
             type="number"
             min="1"
             defaultValue={initial?.totalPages ?? undefined}
-            className="rounded border px-2 py-1"
+            className={fieldInput}
           />
         </label>
 
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+        <label className={`${fieldLabel} flex-1`}>
           状態
           <select
             name="status"
             defaultValue={initial?.status ?? "WANT_TO_READ"}
-            className="rounded border px-2 py-1"
+            className={fieldInput}
           >
-            <option value="WANT_TO_READ">読みたい</option>
-            <option value="READING">読書中</option>
-            <option value="DONE">読了</option>
+            {STATUS_FLOW.map((status) => (
+              <option key={status} value={status}>
+                {STATUS_LABELS[status]}
+              </option>
+            ))}
           </select>
         </label>
       </div>
 
       {state.status === "error" && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {state.message}
         </p>
       )}
@@ -108,16 +112,12 @@ export function BookForm({
           and nothing else changes — so the natural reaction is to press the button again and file
           the same book twice. Nothing in the database prevents the duplicate. */}
       {state.status === "success" && (
-        <p role="status" className="text-sm text-green-700">
+        <p role="status" className="text-sm text-accent">
           {successMessage}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-fit rounded bg-slate-900 px-4 py-1.5 text-sm text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={pending} className={`${buttonPrimary} w-fit`}>
         {pending ? pendingLabel : submitLabel}
       </button>
     </form>

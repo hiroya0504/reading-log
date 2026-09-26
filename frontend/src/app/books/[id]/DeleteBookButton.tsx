@@ -22,7 +22,7 @@ export function DeleteBookButton({ action }: { action: DeleteBookAction }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="w-fit rounded border border-red-300 px-4 py-1.5 text-sm text-red-700"
+        className="h-10 w-fit self-end px-3 text-sm text-danger underline underline-offset-4"
       >
         削除する
       </button>
@@ -30,10 +30,10 @@ export function DeleteBookButton({ action }: { action: DeleteBookAction }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-red-300 p-4">
+    <div className="flex flex-col gap-3 rounded-md border border-danger p-5">
       <p className="text-sm">この本を削除します。元に戻せません。</p>
       {error !== undefined && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -50,7 +50,7 @@ export function DeleteBookButton({ action }: { action: DeleteBookAction }) {
               }
             })
           }
-          className="rounded bg-red-700 px-4 py-1.5 text-sm text-white disabled:opacity-50"
+          className="inline-flex h-10 items-center rounded bg-danger px-4 text-sm text-paper disabled:opacity-50"
         >
           {pending ? "削除中..." : "本当に削除する"}
         </button>
@@ -61,7 +61,7 @@ export function DeleteBookButton({ action }: { action: DeleteBookAction }) {
             setConfirming(false);
             setError(undefined);
           }}
-          className="rounded border px-4 py-1.5 text-sm"
+          className="inline-flex h-10 items-center rounded border border-line px-4 text-sm"
         >
           やめる
         </button>
