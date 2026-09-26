@@ -47,13 +47,13 @@ scripts/review_metrics.py              ルール別の集計
 ```
 
 ```
-resolve ─▶ static-checks ─▶ ai-review ─▶ post-review
- PR の特定   Spotless          Claude        post-review.js（投稿）
- と権限確認  + テスト          読み取り専用    + ai-reviewed ラベルの付与
-                                │
-                                ├─ review-detector-{rules,security,tests} ×(観点 × 8 ファイルごと)
-                                ├─ review-verifier ×(指摘ごと)
-                                └─ 集約 → {detected_count, verified_count, failed_groups, findings[]}
+static-checks ─▶ ai-review ─▶ post-review ─▶ remove-label
+ Spotless          Claude       post-review.js   ai-review ラベルでの
+ + テスト          読み取り専用   投稿権限あり       再実行時だけ
+                    │
+                    ├─ review-detector-{rules,security,tests} ×(観点 × 8 ファイルごと)
+                    ├─ review-verifier ×(指摘ごと)
+                    └─ 集約 → {detected_count, findings[]}
 ```
 
 - 対象は `backend/src/main/java/` 配下の `.java`（テストの観点だけ `backend/src/test/java/` も）。フロントエンドは対象外。
@@ -70,18 +70,14 @@ Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`
 
 ### CI
 
-PR に `/ai-review` とコメントしたときだけ走る。PR の作成や push では走らない。
-
-| 条件 | 内容 |
+| 契機 | 動き |
 | --- | --- |
-| コメント | 1 行目がちょうど `/ai-review`（末尾の空白と、2 行目以降の文は構わない）。`/ai-reviewer` や文中の `/ai-review` では走らない |
-| コメントした人 | 書き込み権限のある人（OWNER / MEMBER / COLLABORATOR）だけ。`issue_comment` は Secret を使える状態で動くため |
-| PR | open のもの。ドラフトも対象。fork からの PR は対象外（他人のコードを Secret のある環境で動かさないため） |
+| PR の作成（opened） | 自動で走る |
+| ドラフトから Ready for review | 自動で走る |
+| `ai-review` ラベルを付ける | 再実行する。終わるとラベルは自動で外れる |
+| push（synchronize） | 走らない。必要なら上のラベルで再実行する |
 
-- 同じ PR で続けて `/ai-review` とコメントすると、古い実行はキャンセルされる。
-- `static-checks`（Spotless とテスト）が落ちた場合は、AI レビューを実行しない。
-- レビューを投稿できたら、PR に **`ai-reviewed` ラベル**を付ける。検出の一部が失敗して「不完全」と投稿した場合も付ける。ラベルは次の `/ai-review` でも付いたまま。
-- `issue_comment` のワークフローは、**デフォルトブランチ（`main`）にある版**で動く。ワークフローの変更は、マージするまで反映されない。PR の中で試すことはできない。
+ドラフトの PR は対象外。`static-checks`（Spotless とテスト）が落ちた場合は、AI レビューを実行しない。
 
 ### 投稿の形
 
@@ -150,7 +146,7 @@ outdated は、行が変更されたことを示すだけで、指摘を受け�
    - このワークフローは `github_token` に `GITHUB_TOKEN` を渡しているので、App そのものが無くても動く。必要なのはトークンの Secret。
    - API キーの従量課金にする場合は、`ANTHROPIC_API_KEY` を登録し、`ai-review.yml` のコメントに従って差し替える。
    - インストーラーは `claude.yml`（@claude で呼ぶ汎用アシスタント）と `claude-code-review.yml`（全 PR の自動レビュー）を追加するブランチも作る。**`claude-code-review.yml` はこの AI レビューと役割が重なるので入れない。**
-2. `ai-reviewed` ラベルを作る（**作成済み**）。消した場合は `gh label create ai-reviewed` で作り直す。
+2. `ai-review` ラベルを作る（`gh label create ai-review`）。
 3. 推奨: `CODEOWNERS` で `.claude/` と `.github/` を保護する。上書きの仕組みは「その PR 自身」にしか効かないため、ルールの変更そのものは人間がレビューする必要がある。
 
 Bedrock / Vertex AI に切り替える場合は、`ai-review.yml` のコメントを参照。

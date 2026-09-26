@@ -228,12 +228,8 @@ function parseOutput(raw) {
   return data;
 }
 
-/**
- * Entry point for actions/github-script.
- * `pr` ({ number, headSha }) is required for issue_comment runs, whose payload has no
- * pull_request; a pull_request payload is used when it is omitted.
- */
-async function run({ github, context, core, structuredOutput, rulesSha, pr: prArg }) {
+/** Entry point for actions/github-script. */
+async function run({ github, context, core, structuredOutput, rulesSha }) {
   let data;
   try {
     data = parseOutput(structuredOutput);
@@ -242,14 +238,7 @@ async function run({ github, context, core, structuredOutput, rulesSha, pr: prAr
     return;
   }
 
-  const pr = prArg ?? {
-    number: context.payload.pull_request?.number,
-    headSha: context.payload.pull_request?.head?.sha,
-  };
-  if (!pr.number || !pr.headSha) {
-    core.setFailed('PR の番号または head SHA が分かりません');
-    return;
-  }
+  const pr = context.payload.pull_request;
   const { owner, repo } = context.repo;
 
   const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -282,7 +271,7 @@ async function run({ github, context, core, structuredOutput, rulesSha, pr: prAr
     owner,
     repo,
     pull_number: pr.number,
-    commit_id: pr.headSha,
+    commit_id: pr.head.sha,
     event: 'COMMENT',
     body,
     comments: parts.inline.map((f) => ({
@@ -292,8 +281,6 @@ async function run({ github, context, core, structuredOutput, rulesSha, pr: prAr
       body: inlineBody(f, titles),
     })),
   });
-  // Read by the workflow's labelling step: label only PRs that actually received a review.
-  core.setOutput('posted', 'true');
 
   await core.summary
     .addHeading('AIレビュー', 2)

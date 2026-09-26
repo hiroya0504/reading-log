@@ -158,7 +158,7 @@ test('parseOutput: rejects empty, non-JSON and malformed findings', () => {
 });
 
 function mocks(files) {
-  const calls = { createReview: [], failed: null, warnings: [], outputs: {} };
+  const calls = { createReview: [], failed: null, warnings: [] };
   const summary = {
     addHeading() {
       return summary;
@@ -189,7 +189,6 @@ function mocks(files) {
     core: {
       setFailed: (m) => (calls.failed = m),
       warning: (m) => calls.warnings.push(m),
-      setOutput: (k, v) => (calls.outputs[k] = v),
       summary,
     },
   };
@@ -214,7 +213,6 @@ test('run: posts exactly one review with inline comments and summary', async () 
     [[FILE, 41, 'RIGHT']],
   );
   assert.match(review.body, /検出 3件 → 検証通過 2件（インライン 1件）/);
-  assert.equal(m.calls.outputs.posted, 'true');
 });
 
 test('run: invalid output fails the step and posts nothing', async () => {
@@ -222,7 +220,6 @@ test('run: invalid output fails the step and posts nothing', async () => {
   await run({ ...m, structuredOutput: '', rulesSha: 'sha1' });
   assert.match(m.calls.failed, /空/);
   assert.equal(m.calls.createReview.length, 0);
-  assert.equal(m.calls.outputs.posted, undefined);
 });
 
 test('summaryBody: failed groups replace "no findings" with an incomplete-review warning', () => {
@@ -264,28 +261,4 @@ test('countsLine: shows the merged count only when aggregation changed it', () =
     countsLine({ detectedCount: 7, verifiedCount: 5, posted: 5, inline: 5 }),
     '検出 7件 → 検証通過 5件（インライン 5件）',
   );
-});
-
-test('run: issue_comment runs pass the PR explicitly (no pull_request in the payload)', async () => {
-  const m = mocks([{ filename: FILE, patch: PATCH }]);
-  m.context.payload = { issue: { number: 12 } };
-  const structuredOutput = JSON.stringify({
-    detected_count: 1,
-    verified_count: 1,
-    failed_groups: 0,
-    findings: [finding({ line: 41 })],
-  });
-  await run({ ...m, structuredOutput, rulesSha: 's', pr: { number: 12, headSha: 'abc' } });
-  assert.equal(m.calls.failed, null);
-  assert.equal(m.calls.createReview[0].pull_number, 12);
-  assert.equal(m.calls.createReview[0].commit_id, 'abc');
-});
-
-test('run: without a PR to post to, fails and posts nothing', async () => {
-  const m = mocks([]);
-  m.context.payload = { issue: { number: 12 } };
-  const structuredOutput = '{"detected_count":0,"verified_count":0,"failed_groups":0,"findings":[]}';
-  await run({ ...m, structuredOutput, rulesSha: 's' });
-  assert.match(m.calls.failed, /head SHA/);
-  assert.equal(m.calls.createReview.length, 0);
 });
