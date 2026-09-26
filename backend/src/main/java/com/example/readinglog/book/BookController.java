@@ -1,5 +1,6 @@
 package com.example.readinglog.book;
 
+import com.example.readinglog.book.dto.BookCountResponse;
 import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookResponse;
@@ -29,9 +30,16 @@ public class BookController {
   private static final int MAX_LIMIT = BookService.MAX_LIMIT;
 
   private final BookService bookService;
+  private final BookStatsService bookStatsService;
+  private final BookLookupService bookLookupService;
 
-  public BookController(BookService bookService) {
+  public BookController(
+      BookService bookService,
+      BookStatsService bookStatsService,
+      BookLookupService bookLookupService) {
     this.bookService = bookService;
+    this.bookStatsService = bookStatsService;
+    this.bookLookupService = bookLookupService;
   }
 
   @Operation(
@@ -61,6 +69,22 @@ public class BookController {
       @Parameter(description = "並び順。") @RequestParam(defaultValue = "NEWEST") BookSort sort) {
     List<BookResponse> items =
         bookService.search(q, sort).stream().map(BookResponse::from).toList();
+    return new BookListResponse(items);
+  }
+
+  @Operation(operationId = "countBooksByAuthor", summary = "Count the user's books by an author.")
+  @GetMapping("/books/count")
+  public BookCountResponse count(@Parameter(description = "著者名。") @RequestParam String author) {
+    return new BookCountResponse(bookStatsService.countByAuthor(author));
+  }
+
+  @Operation(operationId = "findBooks", summary = "Find the user's books by an exact field value.")
+  @GetMapping("/books/find")
+  public BookListResponse find(
+      @Parameter(description = "検索する項目。") @RequestParam BookField field,
+      @Parameter(description = "完全一致で比べる値。") @RequestParam String value) {
+    List<BookResponse> items =
+        bookLookupService.findBy(field, value).stream().map(BookResponse::from).toList();
     return new BookListResponse(items);
   }
 

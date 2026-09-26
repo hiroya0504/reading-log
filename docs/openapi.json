@@ -1,6 +1,15 @@
 {
   "components" : {
     "schemas" : {
+      "BookCountResponse" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BookCreateRequest" : {
         "properties" : {
           "author" : {
@@ -232,6 +241,84 @@
           }
         },
         "summary" : "Register a book for the authenticated user.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
+    "/api/books/count" : {
+      "get" : {
+        "operationId" : "countBooksByAuthor",
+        "parameters" : [
+          {
+            "description" : "著者名。",
+            "in" : "query",
+            "name" : "author",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookCountResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count the user's books by an author.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
+    "/api/books/find" : {
+      "get" : {
+        "operationId" : "findBooks",
+        "parameters" : [
+          {
+            "description" : "検索する項目。",
+            "in" : "query",
+            "name" : "field",
+            "required" : true,
+            "schema" : {
+              "enum" : [
+                "TITLE",
+                "AUTHOR",
+                "ISBN"
+              ],
+              "type" : "string"
+            }
+          },
+          {
+            "description" : "完全一致で比べる値。",
+            "in" : "query",
+            "name" : "value",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find the user's books by an exact field value.",
         "tags" : [
           "book"
         ]
