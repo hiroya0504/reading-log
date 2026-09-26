@@ -36,6 +36,9 @@ const { data, error } = await api.GET("/api/books");
 
 - App Router (`src/app/`)
 - テストは `*.test.tsx` を実装ファイルの隣に置く（`@/` エイリアスは `src/`）
+- **テストは古典派（Khorikov）で書く。ルールは `.claude/skills/ai-review/references/test-rules.md`**（AI レビューの判定基準を兼ねる）。
+  テストを書く・直すときは必ず読む。要点: モックにするのは `client.ts` の `api`・Next.js の実行時・props で渡す Server Action だけ、
+  要素は役割と名前（`getByRole` / `getByLabelText`）で探す、境界値は両側、テストに分岐を書かない。ページに分岐や計算を書いたら関数に切り出して単体テストにする。
 - Server Components がデフォルト。クライアント機能は `"use client"` を明示
 
 ### 境界
