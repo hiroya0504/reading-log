@@ -134,6 +134,16 @@ jobs:
             --allowedTools "Read,Glob,Grep,Agent,Task,Bash(git diff:*),Bash(git show:*),Bash(gh pr diff:*)"
             --json-schema '${{ steps.schema.outputs.json }}'
 
+      # 実行記録（ツール呼び出し、許可の拒否、最終出力）。失敗の調査と、ルールの調整に使う。
+      # アクションのログには拒否の詳細が出ないので、ここで残す。
+      - name: Upload Claude execution log
+        if: always() && steps.review.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-execution-${{ github.run_attempt }}
+          path: ${{ steps.review.outputs.execution_file }}
+          retention-days: 14
+
   post-review:
     needs: ai-review
     runs-on: ubuntu-latest
