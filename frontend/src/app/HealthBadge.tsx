@@ -5,16 +5,10 @@ const LABELS: Record<HealthStatus, string> = {
   unreachable: "API に接続できません",
 };
 
+/** A development aid, so it sits quietly in the footer rather than competing with the shelf. */
 export function HealthBadge({ status }: { status: HealthStatus }) {
   return (
-    <span
-      role="status"
-      className={
-        status === "ok"
-          ? "inline-flex w-fit rounded-full bg-green-100 px-3 py-1 text-sm text-green-900"
-          : "inline-flex w-fit rounded-full bg-red-100 px-3 py-1 text-sm text-red-900"
-      }
-    >
+    <span role="status" className={status === "ok" ? "text-xs text-muted" : "text-xs text-danger"}>
       {LABELS[status]}
     </span>
   );

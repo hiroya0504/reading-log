@@ -6,7 +6,8 @@ import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.example.readinglog.common.error.NotFoundException;
 import com.example.readinglog.common.error.ValidationException;
 import com.example.readinglog.common.security.CurrentUser;
-import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,14 +40,31 @@ public class BookService {
    * ValidationException} already maps to a 400 problem+json body.
    */
   @Transactional(readOnly = true)
-  public List<Book> list(int limit, int offset) {
+  public BookPage list(BookStatus status, int limit, int offset) {
     if (limit < 1 || limit > MAX_LIMIT) {
       throw new ValidationException("limit must be between 1 and " + MAX_LIMIT);
     }
     if (offset < 0) {
       throw new ValidationException("offset must not be negative");
     }
-    return bookMapper.findByUserId(currentUser.requireUserId().value(), limit, offset);
+    long userId = currentUser.requireUserId().value();
+    // One read-only transaction for both, so the total describes the same shelf as the page.
+    return new BookPage(
+        bookMapper.findByUserId(userId, status, limit, offset),
+        bookMapper.countByUserId(userId, status));
+  }
+
+  /** Every status appears, with 0 for the ones the owner has no books in. */
+  @Transactional(readOnly = true)
+  public Map<BookStatus, Long> countByStatus() {
+    Map<BookStatus, Long> counts = new EnumMap<>(BookStatus.class);
+    for (BookStatus status : BookStatus.values()) {
+      counts.put(status, 0L);
+    }
+    for (StatusCount row : bookMapper.countByStatus(currentUser.requireUserId().value())) {
+      counts.put(row.status(), row.count());
+    }
+    return counts;
   }
 
   @Transactional

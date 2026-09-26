@@ -14,19 +14,47 @@ public interface BookMapper {
    * Owner scoping lives in the SQL, not in Java. A caller that forgets to filter afterwards would
    * leak other users' rows silently; here it is impossible to get the rows in the first place.
    *
-   * <p>The ordering matches {@code books_user_id_created_at_idx} in {@code V1__init.sql}.
+   * <p>The ordering matches {@code books_user_id_created_at_idx} in {@code V1__init.sql}. A {@code
+   * null} status means every status.
    */
   @Select(
       """
+      <script>
       SELECT id, user_id, title, author, isbn, total_pages, current_page,
              status, rating, note, created_at, updated_at
         FROM books
        WHERE user_id = #{userId}
+       <if test="status != null">AND status = #{status}</if>
        ORDER BY created_at DESC, id DESC
        LIMIT #{limit} OFFSET #{offset}
+      </script>
       """)
   List<Book> findByUserId(
-      @Param("userId") long userId, @Param("limit") int limit, @Param("offset") int offset);
+      @Param("userId") long userId,
+      @Param("status") BookStatus status,
+      @Param("limit") int limit,
+      @Param("offset") int offset);
+
+  /** The number of rows {@link #findByUserId} pages through, with the same filter. */
+  @Select(
+      """
+      <script>
+      SELECT count(*) FROM books
+       WHERE user_id = #{userId}
+       <if test="status != null">AND status = #{status}</if>
+      </script>
+      """)
+  long countByUserId(@Param("userId") long userId, @Param("status") BookStatus status);
+
+  /** One row per status the owner has books in; a status with none is absent, not zero. */
+  @Select(
+      """
+      SELECT status, count(*) AS count
+        FROM books
+       WHERE user_id = #{userId}
+       GROUP BY status
+      """)
+  List<StatusCount> countByStatus(@Param("userId") long userId);
 
   /**
    * Insert declared as {@code @Select} so PostgreSQL's {@code RETURNING} hands back the generated

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import {
   createBook,
   deleteBook,
+  getBook,
   updateBook,
   updateProgress,
   type BookStatus,
@@ -78,7 +79,9 @@ export async function createBookAction(
   }
 
   revalidatePath("/");
-  return { status: "success" };
+  // To the new book's page: that is where its progress gets recorded, and staying on the form
+  // invites filing the same book twice. `redirect` throws, so it stays outside any try/catch.
+  redirect(`/books/${result.book.id}`);
 }
 
 /**
@@ -107,7 +110,7 @@ export async function updateBookAction(
 
   revalidatePath("/");
   revalidatePath(`/books/${id}`);
-  return { status: "success" };
+  redirect(`/books/${id}`);
 }
 
 /**
@@ -127,6 +130,42 @@ export async function updateProgressAction(
   }
 
   const result = await updateProgress(id, currentPage);
+  if (!result.ok) {
+    return { status: "error", message: result.message };
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/books/${id}`);
+  return { status: "success" };
+}
+
+/**
+ * The status switcher on the book's page, which sends only the new status. `PUT` replaces every
+ * editable field, so the rest is read back first and sent unchanged — sending the status alone
+ * would clear the author, ISBN and page count.
+ */
+export async function updateStatusAction(
+  id: number,
+  _previous: BookFormState,
+  formData: FormData,
+): Promise<BookFormState> {
+  const raw = formData.get("status");
+  if (typeof raw !== "string" || !STATUSES.includes(raw as BookStatus)) {
+    return { status: "error", message: "読書の状態を選んでください。" };
+  }
+
+  const current = await getBook(id);
+  if (!current.ok) {
+    return { status: "error", message: current.message };
+  }
+  const { title, author, isbn, totalPages } = current.book;
+  const result = await updateBook(id, {
+    title,
+    author: author ?? undefined,
+    isbn: isbn ?? undefined,
+    totalPages: totalPages ?? undefined,
+    status: raw as BookStatus,
+  });
   if (!result.ok) {
     return { status: "error", message: result.message };
   }

@@ -40,6 +40,7 @@ const { data, error } = await api.GET("/api/books");
   テストを書く・直すときは必ず読む。要点: モックにするのは `client.ts` の `api`・Next.js の実行時・props で渡す Server Action だけ、
   要素は役割と名前（`getByRole` / `getByLabelText`）で探す、境界値は両側、テストに分岐を書かない。ページに分岐や計算を書いたら関数に切り出して単体テストにする。
 - Server Components がデフォルト。クライアント機能は `"use client"` を明示
+- 色・文字は `globals.css` のデザイントークン（`bg-paper` / `text-muted` / `bg-accent` / `font-serif` など）で指定し、生の色コードを書かない。ボタンや入力欄のクラスは `app/ui/styles.ts` を使う。
 
 ### 境界
 
@@ -50,6 +51,6 @@ const { data, error } = await api.GET("/api/books");
   `client.ts` は `import "server-only"` 付きなので、この境界が資格情報をブラウザバンドルから
   遠ざける実効的な壁になっている。
 - **`"use client"` は対話が必要な葉コンポーネントにのみ付ける。** データ取得とページは
-  Server Component に残す（現状 `"use client"` は `BookForm.tsx` と `books/[id]/DeleteBookButton.tsx`・`books/[id]/ProgressForm.tsx` のみ）。
+  Server Component に残す（現状 `"use client"` は `BookForm.tsx` と `books/[id]/` の `DeleteBookButton.tsx`・`ProgressForm.tsx`・`StatusSwitcher.tsx` のみ）。
 - Server Action と Client Component が共有する型は専用ファイルに切る（`book-form-state.ts`）。
   どちらかに置くと `"use client"` 境界をまたぐ import が生まれる。

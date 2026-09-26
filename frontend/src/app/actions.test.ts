@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Only what lies outside the app is replaced (test-rules.md, "frontend での境界"): the backend
 // behind `client.ts` and the Next.js runtime. `@/lib/api/books` runs for real, so the request each
 // action ends up sending — and the message it builds from a failure — is what gets checked.
+const GET = vi.fn();
 const POST = vi.fn();
 const PUT = vi.fn();
 const DELETE = vi.fn();
@@ -15,6 +16,7 @@ const redirect = vi.fn<(path: string) => never>(() => {
 
 vi.mock("@/lib/api/client", () => ({
   api: {
+    GET: (...args: unknown[]) => GET(...args),
     POST: (...args: unknown[]) => POST(...args),
     PUT: (...args: unknown[]) => PUT(...args),
     DELETE: (...args: unknown[]) => DELETE(...args),
@@ -23,8 +25,13 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => redirect(path) }));
 
-const { createBookAction, updateBookAction, updateProgressAction, deleteBookAction } =
-  await import("./actions");
+const {
+  createBookAction,
+  updateBookAction,
+  updateProgressAction,
+  updateStatusAction,
+  deleteBookAction,
+} = await import("./actions");
 const { initialBookFormState } = await import("./book-form-state");
 
 const BOOK = {
@@ -49,6 +56,7 @@ function fieldError(field: string, message: string) {
 }
 
 beforeEach(() => {
+  GET.mockReset().mockResolvedValue({ data: BOOK, response: { status: 200 } });
   POST.mockReset().mockResolvedValue({ data: BOOK });
   PUT.mockReset().mockResolvedValue({ data: BOOK });
   DELETE.mockReset().mockResolvedValue({ response: { ok: true, status: 204 } });
@@ -58,16 +66,18 @@ beforeEach(() => {
 
 describe("createBookAction", () => {
   it("sends the trimmed fields to the API", async () => {
-    await createBookAction(
-      initialBookFormState,
-      formData({
-        title: "  リファクタリング  ",
-        author: " Martin Fowler ",
-        isbn: " 9784274224546 ",
-        totalPages: "480",
-        status: "READING",
-      }),
-    );
+    await expect(
+      createBookAction(
+        initialBookFormState,
+        formData({
+          title: "  リファクタリング  ",
+          author: " Martin Fowler ",
+          isbn: " 9784274224546 ",
+          totalPages: "480",
+          status: "READING",
+        }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(POST).toHaveBeenCalledWith("/api/books", {
       body: {
@@ -81,10 +91,12 @@ describe("createBookAction", () => {
   });
 
   it("omits blank optional fields instead of sending empty strings", async () => {
-    await createBookAction(
-      initialBookFormState,
-      formData({ title: "t", author: "   ", totalPages: "" }),
-    );
+    await expect(
+      createBookAction(
+        initialBookFormState,
+        formData({ title: "t", author: "   ", totalPages: "" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(POST).toHaveBeenCalledWith("/api/books", {
       body: {
@@ -98,7 +110,9 @@ describe("createBookAction", () => {
   });
 
   it("drops a status that is not one of the declared values", async () => {
-    await createBookAction(initialBookFormState, formData({ title: "t", status: "NOPE" }));
+    await expect(
+      createBookAction(initialBookFormState, formData({ title: "t", status: "NOPE" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(POST).toHaveBeenCalledWith("/api/books", {
       body: expect.objectContaining({ status: undefined }),
@@ -115,11 +129,15 @@ describe("createBookAction", () => {
     expect(POST).not.toHaveBeenCalled();
   });
 
-  it("refreshes the list after a successful create", async () => {
-    const state = await createBookAction(initialBookFormState, formData({ title: "t" }));
+  it("refreshes the list and moves to the new book's page after a successful create", async () => {
+    POST.mockResolvedValue({ data: { ...BOOK, id: 42 } });
 
-    expect(state).toEqual({ status: "success" });
+    await expect(createBookAction(initialBookFormState, formData({ title: "t" }))).rejects.toThrow(
+      "NEXT_REDIRECT",
+    );
+
     expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(redirect).toHaveBeenCalledWith("/books/42");
   });
 
   it("surfaces the backend's field error and does not refresh when the create fails", async () => {
@@ -129,16 +147,19 @@ describe("createBookAction", () => {
 
     expect(state).toEqual({ status: "error", message: "title: title is required" });
     expect(revalidatePath).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });
 
 describe("updateBookAction", () => {
   it("sends the parsed fields to the bound book", async () => {
-    await updateBookAction(
-      7,
-      initialBookFormState,
-      formData({ title: " 新題 ", author: "", isbn: "123", totalPages: "10", status: "DONE" }),
-    );
+    await expect(
+      updateBookAction(
+        7,
+        initialBookFormState,
+        formData({ title: " 新題 ", author: "", isbn: "123", totalPages: "10", status: "DONE" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(PUT).toHaveBeenCalledWith("/api/books/{id}", {
       params: { path: { id: 7 } },
@@ -146,16 +167,14 @@ describe("updateBookAction", () => {
     });
   });
 
-  it("refreshes both the list and the book's page after a successful update", async () => {
-    const state = await updateBookAction(
-      7,
-      initialBookFormState,
-      formData({ title: "t", status: "READING" }),
-    );
+  it("refreshes the list and the book's page, then returns to it, after a successful update", async () => {
+    await expect(
+      updateBookAction(7, initialBookFormState, formData({ title: "t", status: "READING" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(state).toEqual({ status: "success" });
     expect(revalidatePath).toHaveBeenCalledWith("/");
     expect(revalidatePath).toHaveBeenCalledWith("/books/7");
+    expect(redirect).toHaveBeenCalledWith("/books/7");
   });
 
   it("surfaces the backend's field error and does not refresh when the update fails", async () => {
@@ -165,6 +184,7 @@ describe("updateBookAction", () => {
 
     expect(state).toEqual({ status: "error", message: "status: status is required" });
     expect(revalidatePath).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("rejects a non-integer page count without calling the API", async () => {
@@ -223,6 +243,86 @@ describe("updateProgressAction", () => {
       status: "error",
       message: "currentPage must not exceed totalPages (300)",
     });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateStatusAction", () => {
+  it("sends the new status together with the book's other fields, unchanged", async () => {
+    GET.mockResolvedValue({
+      data: {
+        ...BOOK,
+        title: "リファクタリング",
+        author: "Martin Fowler",
+        isbn: "978",
+        totalPages: 480,
+      },
+      response: { status: 200 },
+    });
+
+    await updateStatusAction(7, initialBookFormState, formData({ status: "DONE" }));
+
+    expect(GET).toHaveBeenCalledWith("/api/books/{id}", { params: { path: { id: 7 } } });
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}", {
+      params: { path: { id: 7 } },
+      body: {
+        title: "リファクタリング",
+        author: "Martin Fowler",
+        isbn: "978",
+        totalPages: 480,
+        status: "DONE",
+      },
+    });
+  });
+
+  // `null` would be sent as an explicit null; `undefined` leaves the key out, which PUT reads as
+  // "no value" either way — but only `undefined` matches the request type.
+  it("sends the fields the book does not have as absent", async () => {
+    await updateStatusAction(7, initialBookFormState, formData({ status: "READING" }));
+
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}", {
+      params: { path: { id: 7 } },
+      body: {
+        title: "t",
+        author: undefined,
+        isbn: undefined,
+        totalPages: undefined,
+        status: "READING",
+      },
+    });
+  });
+
+  it("refreshes both the list and the book's page after switching", async () => {
+    const state = await updateStatusAction(7, initialBookFormState, formData({ status: "DONE" }));
+
+    expect(state).toEqual({ status: "success" });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).toHaveBeenCalledWith("/books/7");
+  });
+
+  it.each(["", "NOPE"])("rejects the status %j without calling the API", async (status) => {
+    const state = await updateStatusAction(7, initialBookFormState, formData({ status }));
+
+    expect(state).toEqual({ status: "error", message: "読書の状態を選んでください。" });
+    expect(GET).not.toHaveBeenCalled();
+    expect(PUT).not.toHaveBeenCalled();
+  });
+
+  it("does not write when the book cannot be read first", async () => {
+    GET.mockResolvedValue({ error: { detail: "book 7 not found" }, response: { status: 404 } });
+
+    const state = await updateStatusAction(7, initialBookFormState, formData({ status: "DONE" }));
+
+    expect(state).toEqual({ status: "error", message: "book 7 not found" });
+    expect(PUT).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the backend's message and does not refresh when the write fails", async () => {
+    PUT.mockResolvedValue(fieldError("status", "status is required"));
+
+    const state = await updateStatusAction(7, initialBookFormState, formData({ status: "DONE" }));
+
+    expect(state).toEqual({ status: "error", message: "status: status is required" });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

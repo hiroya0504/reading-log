@@ -53,10 +53,17 @@
               "$ref" : "#/components/schemas/BookResponse"
             },
             "type" : "array"
+          },
+          "total" : {
+            "description" : "同じ絞り込みでの全件数。limit / offset に関係しない。ページ送りに使う。",
+            "example" : 42,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "required" : [
-          "items"
+          "items",
+          "total"
         ],
         "type" : "object"
       },
@@ -149,6 +156,34 @@
         ],
         "type" : "object"
       },
+      "BookStatusCountsResponse" : {
+        "properties" : {
+          "done" : {
+            "description" : "読了した本の冊数。",
+            "example" : 10,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reading" : {
+            "description" : "読書中の本の冊数。",
+            "example" : 2,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "wantToRead" : {
+            "description" : "読みたい本の冊数。",
+            "example" : 3,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "done",
+          "reading",
+          "wantToRead"
+        ],
+        "type" : "object"
+      },
       "BookUpdateRequest" : {
         "properties" : {
           "author" : {
@@ -224,6 +259,20 @@
         "operationId" : "listBooks",
         "parameters" : [
           {
+            "description" : "この読書状態の本だけを返す。省略するとすべて。",
+            "in" : "query",
+            "name" : "status",
+            "required" : false,
+            "schema" : {
+              "enum" : [
+                "WANT_TO_READ",
+                "READING",
+                "DONE"
+              ],
+              "type" : "string"
+            }
+          },
+          {
             "description" : "1 ページの件数。1〜100。",
             "in" : "query",
             "name" : "limit",
@@ -291,6 +340,27 @@
           }
         },
         "summary" : "Register a book for the authenticated user.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
+    "/api/books/counts" : {
+      "get" : {
+        "operationId" : "countBooksByStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookStatusCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count the authenticated user's books per reading status.",
         "tags" : [
           "book"
         ]

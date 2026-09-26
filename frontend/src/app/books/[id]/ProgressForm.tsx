@@ -4,7 +4,8 @@ import { useActionState } from "react";
 import type { Book } from "@/lib/api/books";
 import { initialBookFormState } from "../../book-form-state";
 import type { BookFormAction } from "../../BookForm";
-import { ProgressBar } from "../../ProgressBar";
+import { ProgressBar, progressPercent } from "../../ProgressBar";
+import { buttonPrimary, card, fieldInput, fieldLabel, sectionHeading } from "../../ui/styles";
 
 /**
  * Records the page the reader is on. Kept apart from `BookForm` because this is the thing done
@@ -20,50 +21,59 @@ export function ProgressForm({ action, book }: { action: BookFormAction; book: B
   const [state, formAction, pending] = useActionState(action, initialBookFormState);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-md border p-4">
-      <h2 className="text-sm font-medium">読書の進捗</h2>
+    <section
+      aria-labelledby="progress"
+      className={`${card} flex flex-col gap-5 p-6 sm:px-9 sm:py-8`}
+    >
+      <div className="flex items-baseline justify-between">
+        <h2 id="progress" className={sectionHeading}>
+          読書の進捗
+        </h2>
+        {book.totalPages !== null && (
+          <span className="font-serif text-[40px] leading-none font-bold text-accent">
+            {progressPercent(book.currentPage, book.totalPages)}%
+          </span>
+        )}
+      </div>
 
       {book.totalPages !== null ? (
-        <ProgressBar currentPage={book.currentPage} totalPages={book.totalPages} />
+        <ProgressBar currentPage={book.currentPage} totalPages={book.totalPages} thick />
       ) : (
-        <p className="text-xs opacity-70">総ページ数を登録すると進捗率が表示されます。</p>
+        <p className="text-[13px] text-muted">総ページ数を登録すると進捗率が表示されます。</p>
       )}
 
-      <div className="flex items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
+      <form action={formAction} className="flex flex-wrap items-end gap-3">
+        <label className={fieldLabel}>
           今読んでいるページ
           <input
             name="currentPage"
             type="number"
             min="0"
             defaultValue={book.currentPage}
-            className="w-28 rounded border px-2 py-1"
+            className={`${fieldInput} w-32 text-[17px]`}
           />
         </label>
         {/* Outside the label so it does not become part of the input's accessible name. */}
         {book.totalPages !== null && (
-          <span className="py-1 text-sm opacity-70">/ {book.totalPages} ページ</span>
+          <span className="flex h-11 items-center text-[15px] text-muted">
+            / {book.totalPages} ページ
+          </span>
         )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-fit rounded bg-slate-900 px-4 py-1.5 text-sm text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={pending} className={`${buttonPrimary} ml-auto`}>
           {pending ? "記録中..." : "記録する"}
         </button>
-      </div>
+      </form>
 
       {state.status === "error" && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {state.message}
         </p>
       )}
       {state.status === "success" && (
-        <p role="status" className="text-sm text-green-700">
+        <p role="status" className="text-sm text-accent">
           記録しました。
         </p>
       )}
-    </form>
+    </section>
   );
 }

@@ -21,13 +21,12 @@ describe("progressPercent", () => {
 });
 
 describe("ProgressBar", () => {
-  it("exposes the percentage to assistive technology and as text", () => {
+  it("exposes the percentage to assistive technology", () => {
     render(<ProgressBar currentPage={120} totalPages={300} label="本の進捗" />);
 
     expect(screen.getByRole("progressbar", { name: "本の進捗" })).toHaveAttribute(
       "aria-valuenow",
       "40",
     );
-    expect(screen.getByText("40%")).toBeInTheDocument();
   });
 });

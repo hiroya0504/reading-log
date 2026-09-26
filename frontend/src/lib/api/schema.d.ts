@@ -22,6 +22,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/books/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count the authenticated user's books per reading status. */
+        get: operations["countBooksByStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/books/{id}": {
         parameters: {
             query?: never;
@@ -110,6 +127,12 @@ export interface components {
         BookListResponse: {
             /** @description 登録日時の新しい順。 */
             items: components["schemas"]["BookResponse"][];
+            /**
+             * Format: int64
+             * @description 同じ絞り込みでの全件数。limit / offset に関係しない。ページ送りに使う。
+             * @example 42
+             */
+            total: number;
         };
         BookProgressUpdateRequest: {
             /**
@@ -177,6 +200,26 @@ export interface components {
              */
             updatedAt: string;
         };
+        BookStatusCountsResponse: {
+            /**
+             * Format: int64
+             * @description 読了した本の冊数。
+             * @example 10
+             */
+            done: number;
+            /**
+             * Format: int64
+             * @description 読書中の本の冊数。
+             * @example 2
+             */
+            reading: number;
+            /**
+             * Format: int64
+             * @description 読みたい本の冊数。
+             * @example 3
+             */
+            wantToRead: number;
+        };
         BookUpdateRequest: {
             /**
              * @description 著者名。省略すると消える。
@@ -224,6 +267,8 @@ export interface operations {
     listBooks: {
         parameters: {
             query?: {
+                /** @description この読書状態の本だけを返す。省略するとすべて。 */
+                status?: "WANT_TO_READ" | "READING" | "DONE";
                 /** @description 1 ページの件数。1〜100。 */
                 limit?: number;
                 /** @description 読み飛ばす件数。0 以上。 */
@@ -266,6 +311,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BookResponse"];
+                };
+            };
+        };
+    };
+    countBooksByStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BookStatusCountsResponse"];
                 };
             };
         };

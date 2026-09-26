@@ -16,8 +16,15 @@ vi.mock("./client", () => ({
   },
 }));
 
-const { listBooks, createBook, getBook, updateBook, updateProgress, deleteBook } =
-  await import("./books");
+const {
+  listBooks,
+  countBooksByStatus,
+  createBook,
+  getBook,
+  updateBook,
+  updateProgress,
+  deleteBook,
+} = await import("./books");
 
 const RAW = {
   id: 7,
@@ -38,7 +45,7 @@ describe("listBooks", () => {
 
   it("normalises absent optional fields to null", async () => {
     GET.mockResolvedValue({
-      data: { items: [{ ...RAW, author: undefined, totalPages: undefined }] },
+      data: { items: [{ ...RAW, author: undefined, totalPages: undefined }], total: 1 },
     });
 
     const result = await listBooks();
@@ -56,13 +63,34 @@ describe("listBooks", () => {
           status: "READING",
         },
       ],
+      total: 1,
+    });
+  });
+
+  it("asks for the given status and page, and passes the total through", async () => {
+    GET.mockResolvedValue({ data: { items: [RAW], total: 41 } });
+
+    const result = await listBooks({ status: "READING", limit: 20, offset: 40 });
+
+    expect(GET).toHaveBeenCalledWith("/api/books", {
+      params: { query: { status: "READING", limit: 20, offset: 40 } },
+    });
+    expect(result).toEqual({ ok: true, books: [expect.objectContaining({ id: 7 })], total: 41 });
+  });
+
+  it("does not read a response missing the total as a shelf with no pages", async () => {
+    GET.mockResolvedValue({ data: { items: [RAW] } });
+
+    expect(await listBooks()).toEqual({
+      ok: false,
+      message: "本の一覧を取得できませんでした。",
     });
   });
 
   it("reports an empty shelf only when the backend actually says the shelf is empty", async () => {
-    GET.mockResolvedValue({ data: { items: [] } });
+    GET.mockResolvedValue({ data: { items: [], total: 0 } });
 
-    expect(await listBooks()).toEqual({ ok: true, books: [] });
+    expect(await listBooks()).toEqual({ ok: true, books: [], total: 0 });
   });
 
   // The 401 Spring Security returns has no body, so openapi-fetch reports `error: undefined` for a
@@ -86,7 +114,7 @@ describe("listBooks", () => {
   });
 
   it("does not read a response missing items as an empty shelf", async () => {
-    GET.mockResolvedValue({ data: {} });
+    GET.mockResolvedValue({ data: { total: 0 } });
 
     expect(await listBooks()).toEqual({
       ok: false,
@@ -106,6 +134,45 @@ describe("listBooks", () => {
     GET.mockRejectedValue(new Error("ECONNREFUSED"));
 
     expect(await listBooks()).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+});
+
+describe("countBooksByStatus", () => {
+  beforeEach(() => {
+    GET.mockReset();
+  });
+
+  it("keys each count by its status", async () => {
+    GET.mockResolvedValue({ data: { wantToRead: 3, reading: 2, done: 10 } });
+
+    const result = await countBooksByStatus();
+
+    expect(GET).toHaveBeenCalledWith("/api/books/counts");
+    expect(result).toEqual({ ok: true, counts: { WANT_TO_READ: 3, READING: 2, DONE: 10 } });
+  });
+
+  it("surfaces the backend's message", async () => {
+    GET.mockResolvedValue({ error: { detail: "Something broke" } });
+
+    expect(await countBooksByStatus()).toEqual({ ok: false, message: "Something broke" });
+  });
+
+  it("does not read a bodyless failure as an empty shelf", async () => {
+    GET.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await countBooksByStatus()).toEqual({
+      ok: false,
+      message: "本の冊数を取得できませんでした。",
+    });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    GET.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await countBooksByStatus()).toEqual({
       ok: false,
       message: "バックエンドに接続できませんでした。",
     });

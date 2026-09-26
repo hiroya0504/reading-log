@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { BookForm, type BookFormAction } from "./BookForm";
@@ -85,6 +85,13 @@ describe("BookForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "登録する" }));
 
     await waitFor(() => expect(action).toHaveBeenCalledOnce());
+  });
+
+  it("offers the statuses by their Japanese names, in reading order", () => {
+    render(<BookForm action={stubAction({ status: "idle" })} />);
+
+    const options = within(screen.getByLabelText("状態")).getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual(["読みたい", "読書中", "読了"]);
   });
 
   it("pre-fills every field from the book being edited", () => {

@@ -1,31 +1,78 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens for the "paper and bookshelf" look. Components use the Tailwind names from
+ * @theme below (bg-paper, text-muted, border-line, bg-accent, font-serif, ...), never raw hex,
+ * so a colour change is made here once.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --paper: #f4eee2;
+  --card: #fbf8f1;
+  --ink: #2a241f;
+  --muted: #6b5f53;
+  --line: #ddd2c0;
+  --line-soft: #e8dfd0;
+  --track: #e4dacb;
+  --field: #ffffff;
+  --accent: #2f5245;
+  --accent-strong: #1f382f;
+  --on-accent: #fbf8f1;
+  --danger: #8a3b2e;
+  --chip-reading: #dce7df;
+  --on-chip-reading: #1f382f;
+  --chip-want: #ede3d2;
+  --on-chip-want: #5a4a36;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #1b1815;
+    --card: #24201c;
+    --ink: #ede6da;
+    --muted: #b3a796;
+    --line: #3d362f;
+    --line-soft: #2f2a25;
+    --track: #3a332c;
+    --field: #1b1815;
+    --accent: #8cc0a8;
+    --accent-strong: #b3d8c6;
+    --on-accent: #14201b;
+    --danger: #e59a88;
+    --chip-reading: #2c4038;
+    --on-chip-reading: #c9e3d6;
+    --chip-want: #3a3128;
+    --on-chip-want: #e3d3bb;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-track: var(--track);
+  --color-field: var(--field);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-chip-reading: var(--chip-reading);
+  --color-on-chip-reading: var(--on-chip-reading);
+  --color-chip-want: var(--chip-want);
+  --color-on-chip-want: var(--on-chip-want);
+
+  /* OS fonts only: keeps the build free of network fetches (see layout.tsx). */
+  --font-serif:
+    "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
+  --font-sans:
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP",
+    ui-sans-serif, system-ui, sans-serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    "Hiragino Sans",
-    "Noto Sans JP",
-    sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
 }

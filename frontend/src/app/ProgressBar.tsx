@@ -8,30 +8,33 @@ export function progressPercent(currentPage: number, totalPages: number): number
 }
 
 /** Presentational and hook-free, so both server and client components can render it. */
+/**
+ * Just the bar. The percentage is printed by the caller, which decides how prominent it is (a
+ * large figure on the book's page, a small one on the shelf).
+ */
 export function ProgressBar({
   currentPage,
   totalPages,
   label = "読書の進捗",
+  thick = false,
 }: {
   currentPage: number;
   totalPages: number;
   label?: string;
+  thick?: boolean;
 }) {
   const percent = progressPercent(currentPage, totalPages);
 
   return (
-    <div className="flex items-center gap-2">
-      <div
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200"
-      >
-        <div className="h-full rounded-full bg-blue-600" style={{ width: `${percent}%` }} />
-      </div>
-      <span className="w-10 text-right text-xs tabular-nums opacity-70">{percent}%</span>
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      className={`overflow-hidden rounded-full bg-track ${thick ? "h-2" : "h-1"}`}
+    >
+      <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
     </div>
   );
 }
