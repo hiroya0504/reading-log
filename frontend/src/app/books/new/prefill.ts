@@ -55,3 +55,8 @@ export function prefillFromParams(params: Params): BookFormValues | undefined {
 export function queryToSearch(params: Params): string | undefined {
   return prefillFromParams(params) === undefined ? searchQuery(params) : undefined;
 }
+
+/** The form's heading: whether it is filled in from a chosen candidate or starts empty. */
+export function registerHeading(prefill: BookFormValues | undefined): string {
+  return prefill === undefined ? "手で入力する" : "この内容で登録する";
+}

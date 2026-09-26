@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { candidateHref, prefillFromParams, queryToSearch, searchQuery } from "./prefill";
+import {
+  candidateHref,
+  prefillFromParams,
+  queryToSearch,
+  registerHeading,
+  searchQuery,
+} from "./prefill";
 import type { BookCandidate } from "@/lib/api/bookSearch";
 
 /** Reads a link back into the params object a page receives. */
@@ -70,5 +76,17 @@ describe("queryToSearch", () => {
 
   it("does not search again once a candidate has been chosen", () => {
     expect(queryToSearch({ q: "リファクタリング", title: "リファクタリング" })).toBeUndefined();
+  });
+});
+
+describe("registerHeading", () => {
+  it("invites typing the book in when nothing was chosen", () => {
+    expect(registerHeading(undefined)).toBe("手で入力する");
+  });
+
+  it("asks to confirm the chosen book", () => {
+    expect(
+      registerHeading({ title: "t", author: null, isbn: null, totalPages: null, coverUrl: null }),
+    ).toBe("この内容で登録する");
   });
 });

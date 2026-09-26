@@ -89,6 +89,34 @@ class GoogleBooksClientTest {
     assertThat(found.getFirst().coverUrl()).isNull();
   }
 
+  /** The second allowed host: without it every cover served from there would be dropped. */
+  @Test
+  void keepsACoverOnGoogleusercontent() {
+    List<BookCandidate> found =
+        searchWith(
+            "{\"title\":\"t\",\"imageLinks\":{\"thumbnail\":\"http://books.googleusercontent.com/t\"}}");
+
+    assertThat(found.getFirst().coverUrl()).isEqualTo("https://books.googleusercontent.com/t");
+  }
+
+  /** A host that merely starts with an allowed one must not pass: the "/" after it is required. */
+  @Test
+  void dropsACoverOnALookalikeHost() {
+    List<BookCandidate> found =
+        searchWith(
+            "{\"title\":\"t\",\"imageLinks\":{\"thumbnail\":\"http://books.google.com.evil.example/t.png\"}}");
+
+    assertThat(found.getFirst().coverUrl()).isNull();
+  }
+
+  /** An empty author list would otherwise join into "". */
+  @Test
+  void leavesAnEmptyAuthorListNull() {
+    List<BookCandidate> found = searchWith("{\"title\":\"t\",\"authors\":[]}");
+
+    assertThat(found.getFirst().author()).isNull();
+  }
+
   @Test
   void leavesEveryMissingFieldNull() {
     List<BookCandidate> found = searchWith("{\"title\":\"t\"}");

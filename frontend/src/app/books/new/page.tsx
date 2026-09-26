@@ -3,7 +3,7 @@ import { BookForm } from "../../BookForm";
 import { createBookAction } from "../../actions";
 import { BookCover } from "../../ui/BookCover";
 import { buttonPrimary, fieldInput, sectionHeading } from "../../ui/styles";
-import { prefillFromParams, queryToSearch, searchQuery } from "./prefill";
+import { prefillFromParams, queryToSearch, registerHeading, searchQuery } from "./prefill";
 import { SearchResults } from "./SearchResults";
 import { searchBooks } from "@/lib/api/bookSearch";
 
@@ -55,7 +55,7 @@ export default async function NewBookPage({
 
       <section aria-labelledby="register" className="flex flex-col gap-4">
         <h2 id="register" className={sectionHeading}>
-          {prefill === undefined ? "手で入力する" : "この内容で登録する"}
+          {registerHeading(prefill)}
         </h2>
         {prefill !== undefined && <BookCover book={{ ...prefill, id: 0 }} size="md" />}
         {/* Keyed on the chosen book so picking another one resets the fields. */}

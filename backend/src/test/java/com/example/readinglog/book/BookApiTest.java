@@ -665,6 +665,32 @@ class BookApiTest {
       assertRejectedField(response, "coverUrl");
     }
 
+    /** The list has its own SELECT; a column missing there alone would drop covers on the shelf. */
+    @Test
+    void listReturnsTheCover() {
+      create(asDev(), new BookCreateRequest("t", null, null, null, null, COVER));
+
+      assertThat(list(asDev(), "").items())
+          .singleElement()
+          .extracting(BookResponse::coverUrl)
+          .isEqualTo(COVER);
+    }
+
+    /** The accepted side of the length bound on update; 501 is in {@link #invalidCoverUrls}. */
+    @Test
+    void updateAcceptsACoverAtTheMaximumLength() {
+      BookResponse created = create(asDev(), "t");
+
+      ResponseEntity<JsonNode> response =
+          put(
+              asDev(),
+              created.id(),
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, coverOfLength(500)));
+
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(read(created.id()).coverUrl()).hasSize(500);
+    }
+
     @Test
     void updateReplacesTheCover() {
       BookResponse created = create(asDev(), "t");

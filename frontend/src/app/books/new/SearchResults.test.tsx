@@ -25,9 +25,15 @@ describe("SearchResults", () => {
 
     const results = within(screen.getByRole("list", { name: "検索結果" }));
     expect(results.getAllByRole("listitem")).toHaveLength(2);
+    // Written out rather than built with candidateHref, and checked for both rows, so a row that
+    // links to another row's candidate (or drops a field) fails here.
     expect(results.getByRole("link", { name: "「リファクタリング」で登録する" })).toHaveAttribute(
       "href",
-      expect.stringContaining("/books/new?title="),
+      "/books/new?title=%E3%83%AA%E3%83%95%E3%82%A1%E3%82%AF%E3%82%BF%E3%83%AA%E3%83%B3%E3%82%B0&author=Martin+Fowler&isbn=9784274224546&totalPages=480",
+    );
+    expect(results.getByRole("link", { name: "「別の本」で登録する" })).toHaveAttribute(
+      "href",
+      "/books/new?title=%E5%88%A5%E3%81%AE%E6%9C%AC&author=Martin+Fowler&totalPages=480",
     );
     expect(results.getByText("480 ページ ・ 9784274224546")).toBeInTheDocument();
   });
