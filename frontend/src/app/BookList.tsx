@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Book, BookStatus } from "@/lib/api/books";
+import { ProgressBar } from "./ProgressBar";
 
 const STATUS_LABELS: Record<BookStatus, string> = {
   WANT_TO_READ: "読みたい",
@@ -62,6 +63,13 @@ export function BookList({ books, error }: { books: Book[]; error?: string }) {
               </span>
             )}
           </div>
+          {book.totalPages !== null && (
+            <ProgressBar
+              currentPage={book.currentPage}
+              totalPages={book.totalPages}
+              label={`${book.title} の進捗`}
+            />
+          )}
         </li>
       ))}
     </ul>

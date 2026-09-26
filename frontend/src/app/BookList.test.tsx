@@ -60,6 +60,18 @@ describe("BookList", () => {
     render(<BookList books={[book({ totalPages: null })]} />);
 
     expect(screen.queryByText(/ページ/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  });
+
+  it("draws a progress bar per book, named after the book", () => {
+    render(
+      <BookList books={[book({ title: "リファクタリング", totalPages: 400, currentPage: 100 })]} />,
+    );
+
+    expect(screen.getByRole("progressbar", { name: "リファクタリング の進捗" })).toHaveAttribute(
+      "aria-valuenow",
+      "25",
+    );
   });
 
   it("reports a read failure instead of claiming the shelf is empty", () => {

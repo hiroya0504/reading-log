@@ -47,6 +47,6 @@ const { data, error } = await api.GET("/api/books");
   `client.ts` は `import "server-only"` 付きなので、この境界が資格情報をブラウザバンドルから
   遠ざける実効的な壁になっている。
 - **`"use client"` は対話が必要な葉コンポーネントにのみ付ける。** データ取得とページは
-  Server Component に残す（現状 `"use client"` は `BookForm.tsx` と `books/[id]/DeleteBookButton.tsx` のみ）。
+  Server Component に残す（現状 `"use client"` は `BookForm.tsx` と `books/[id]/DeleteBookButton.tsx`・`books/[id]/ProgressForm.tsx` のみ）。
 - Server Action と Client Component が共有する型は専用ファイルに切る（`book-form-state.ts`）。
   どちらかに置くと `"use client"` 境界をまたぐ import が生まれる。
