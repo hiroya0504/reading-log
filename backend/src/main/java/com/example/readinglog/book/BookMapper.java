@@ -1,6 +1,7 @@
 package com.example.readinglog.book;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
@@ -55,4 +56,16 @@ public interface BookMapper {
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
       @Param("status") BookStatus status);
+
+  @Select(
+      """
+      SELECT id, user_id, title, author, isbn, total_pages, current_page,
+             status, rating, note, created_at, updated_at
+        FROM books
+       WHERE id = #{id}
+      """)
+  Book findById(@Param("id") long id);
+
+  @Delete("DELETE FROM books WHERE id = #{id} AND user_id = #{userId}")
+  int delete(@Param("userId") long userId, @Param("id") long id);
 }

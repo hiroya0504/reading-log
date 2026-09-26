@@ -1,9 +1,11 @@
 package com.example.readinglog.book;
 
 import com.example.readinglog.book.dto.BookCreateRequest;
+import com.example.readinglog.common.error.NotFoundException;
 import com.example.readinglog.common.error.ValidationException;
 import com.example.readinglog.common.security.CurrentUser;
 import java.util.List;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,5 +57,24 @@ public class BookService {
         request.isbn(),
         request.totalPages(),
         request.statusOrDefault());
+  }
+
+  @Transactional(readOnly = true)
+  public Book get(long id) {
+    Book book = bookMapper.findById(id);
+    if (book == null) {
+      throw new NotFoundException("Book " + id + " does not exist");
+    }
+    return book;
+  }
+
+  /** Returns false when the user has no book with that id. */
+  @Transactional
+  public boolean delete(long id) {
+    try {
+      return bookMapper.delete(currentUser.requireUserId().value(), id) > 0;
+    } catch (DataAccessException e) {
+      return false;
+    }
   }
 }

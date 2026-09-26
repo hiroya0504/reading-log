@@ -144,6 +144,25 @@
           }
         },
         "type" : "object"
+      },
+      "User" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "passwordHash" : {
+            "type" : "string"
+          },
+          "username" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
       }
     },
     "securitySchemes" : {
@@ -237,6 +256,61 @@
         ]
       }
     },
+    "/api/books/{id}" : {
+      "delete" : {
+        "operationId" : "deleteBook",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content"
+          }
+        },
+        "summary" : "Delete one of the authenticated user's books.",
+        "tags" : [
+          "book"
+        ]
+      },
+      "get" : {
+        "operationId" : "getBook",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Get one book by id.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
     "/api/health" : {
       "get" : {
         "operationId" : "health",
@@ -256,6 +330,27 @@
         "summary" : "Liveness probe. Open to unauthenticated callers.",
         "tags" : [
           "health"
+        ]
+      }
+    },
+    "/api/me" : {
+      "get" : {
+        "operationId" : "getMe",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The authenticated user's account.",
+        "tags" : [
+          "user"
         ]
       }
     }

@@ -8,4 +8,7 @@ public interface UserMapper {
 
   @Select("SELECT id, username, password_hash, created_at FROM users WHERE username = #{username}")
   User findByUsername(String username);
+
+  @Select("SELECT id, username, password_hash, created_at FROM users WHERE id = #{id}")
+  User findById(long id);
 }

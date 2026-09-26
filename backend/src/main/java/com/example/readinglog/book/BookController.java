@@ -3,6 +3,7 @@ package com.example.readinglog.book;
 import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookResponse;
+import com.example.readinglog.common.error.NotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,7 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,5 +62,20 @@ public class BookController {
   @PostMapping("/books")
   public BookResponse create(@Valid @RequestBody BookCreateRequest request) {
     return BookResponse.from(bookService.create(request));
+  }
+
+  @Operation(operationId = "getBook", summary = "Get one book by id.")
+  @GetMapping("/books/{id}")
+  public BookResponse get(@PathVariable long id) {
+    return BookResponse.from(bookService.get(id));
+  }
+
+  @Operation(operationId = "deleteBook", summary = "Delete one of the authenticated user's books.")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @DeleteMapping("/books/{id}")
+  public void delete(@PathVariable long id) {
+    if (!bookService.delete(id)) {
+      throw new NotFoundException("Book " + id + " does not exist");
+    }
   }
 }
