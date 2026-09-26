@@ -3,7 +3,7 @@ import { BookForm } from "../../BookForm";
 import { createBookAction } from "../../actions";
 import { BookCover } from "../../ui/BookCover";
 import { buttonPrimary, fieldInput, sectionHeading } from "../../ui/styles";
-import { prefillFromParams, queryToSearch, registerHeading, searchQuery } from "./prefill";
+import { formKey, prefillFromParams, queryToSearch, registerHeading, searchQuery } from "./prefill";
 import { SearchResults } from "./SearchResults";
 import { searchBooks } from "@/lib/api/bookSearch";
 
@@ -59,7 +59,7 @@ export default async function NewBookPage({
         </h2>
         {prefill !== undefined && <BookCover book={{ ...prefill, id: 0 }} size="md" />}
         {/* Keyed on the chosen book so picking another one resets the fields. */}
-        <BookForm key={JSON.stringify(prefill ?? {})} action={createBookAction} initial={prefill} />
+        <BookForm key={formKey(prefill)} action={createBookAction} initial={prefill} />
       </section>
     </main>
   );

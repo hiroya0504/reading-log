@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   candidateHref,
   prefillFromParams,
+  formKey,
   queryToSearch,
   registerHeading,
   searchQuery,
@@ -88,5 +89,29 @@ describe("registerHeading", () => {
     expect(
       registerHeading({ title: "t", author: null, isbn: null, totalPages: null, coverUrl: null }),
     ).toBe("この内容で登録する");
+  });
+});
+
+describe("formKey", () => {
+  const chosen = {
+    title: "t",
+    author: null,
+    isbn: null,
+    totalPages: null,
+    coverUrl: "https://books.google.com/a",
+  };
+
+  it("changes when another candidate is chosen, even if only the cover differs", () => {
+    expect(formKey(chosen)).not.toBe(
+      formKey({ ...chosen, coverUrl: "https://books.google.com/b" }),
+    );
+  });
+
+  it("changes between choosing a candidate and entering by hand", () => {
+    expect(formKey(chosen)).not.toBe(formKey(undefined));
+  });
+
+  it("stays the same for the same choice, so re-rendering keeps what the user typed", () => {
+    expect(formKey({ ...chosen })).toBe(formKey(chosen));
   });
 });

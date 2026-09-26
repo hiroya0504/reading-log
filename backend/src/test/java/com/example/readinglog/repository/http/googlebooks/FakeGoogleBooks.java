@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -21,6 +22,7 @@ public final class FakeGoogleBooks implements AutoCloseable {
   private final List<URI> requests = new CopyOnWriteArrayList<>();
   private volatile int status = 200;
   private volatile String body = "{}";
+  private volatile Duration delay = Duration.ZERO;
 
   public FakeGoogleBooks() {
     try {
@@ -32,6 +34,11 @@ public final class FakeGoogleBooks implements AutoCloseable {
         "/",
         exchange -> {
           requests.add(exchange.getRequestURI());
+          try {
+            Thread.sleep(delay.toMillis());
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
           byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(status, bytes.length);
@@ -47,6 +54,12 @@ public final class FakeGoogleBooks implements AutoCloseable {
   }
 
   public void answer(int status, String body) {
+    answerAfter(Duration.ZERO, status, body);
+  }
+
+  /** As {@link #answer}, but only after {@code delay} — for exercising the client's timeout. */
+  public void answerAfter(Duration delay, int status, String body) {
+    this.delay = delay;
     this.status = status;
     this.body = body;
     requests.clear();

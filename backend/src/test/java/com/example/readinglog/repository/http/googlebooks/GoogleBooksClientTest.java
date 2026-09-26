@@ -177,6 +177,26 @@ class GoogleBooksClientTest {
             });
   }
 
+  /** A "+" left as is would reach Google as a space: "C++" would search for "C". */
+  @Test
+  void sendsAPlusSignAsAPlusSign() {
+    google.answer(200, "{}");
+
+    catalog("key").search("C++");
+
+    assertThat(google.requests().getFirst().getRawQuery()).startsWith("q=C%2B%2B&");
+  }
+
+  /** Braces are text to search for, not a URI template variable (that threw, and became a 500). */
+  @Test
+  void sendsBracesAsText() {
+    google.answer(200, "{}");
+
+    catalog("key").search("{x}");
+
+    assertThat(google.requests().getFirst().getRawQuery()).startsWith("q=%7Bx%7D&");
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"", "  "})
   void sendsNoKeyWhenNoneIsConfigured(String apiKey) {
@@ -203,6 +223,21 @@ class GoogleBooksClientTest {
     google.answer(status, "{\"error\":{}}");
 
     assertThatThrownBy(() -> catalog("key").search("q"))
+        .isInstanceOf(BadGatewayException.class)
+        .extracting("errorCode")
+        .isEqualTo("BOOK_SEARCH_UNAVAILABLE");
+  }
+
+  /** A catalog that does not answer in time is reported like any other failure, not waited on. */
+  @Test
+  void givesUpOnAnAnswerThatTakesLongerThanTheTimeout() {
+    google.answerAfter(Duration.ofSeconds(1), 200, "{}");
+    GoogleBooksClient impatient =
+        new GoogleBooksClient(
+            RestClient.builder(),
+            new GoogleBooksProperties(google.baseUrl(), "key", Duration.ofMillis(200)));
+
+    assertThatThrownBy(() -> impatient.search("q"))
         .isInstanceOf(BadGatewayException.class)
         .extracting("errorCode")
         .isEqualTo("BOOK_SEARCH_UNAVAILABLE");

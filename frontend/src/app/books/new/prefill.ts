@@ -60,3 +60,12 @@ export function queryToSearch(params: Params): string | undefined {
 export function registerHeading(prefill: BookFormValues | undefined): string {
   return prefill === undefined ? "手で入力する" : "この内容で登録する";
 }
+
+/**
+ * The key that rebuilds the form when a different candidate is chosen. The fields take their
+ * values as `defaultValue`, so without a new key a client-side navigation would keep showing the
+ * previously chosen book.
+ */
+export function formKey(prefill: BookFormValues | undefined): string {
+  return JSON.stringify(prefill ?? {});
+}

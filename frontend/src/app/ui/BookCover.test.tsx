@@ -62,9 +62,13 @@ describe("BookCover", () => {
       />,
     );
 
+    // next/image routes the URL through its optimiser, so the book's URL appears encoded in `src`.
     expect(
       screen.getByRole("img", { hidden: true, name: "リファクタリング の表紙" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining(encodeURIComponent("https://books.google.com/t")),
+    );
     expect(screen.queryByText("リファクタリング")).not.toBeInTheDocument();
   });
 

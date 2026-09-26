@@ -4,7 +4,9 @@ import com.example.readinglog.booksearch.BookCandidate;
 import com.example.readinglog.booksearch.BookCatalog;
 import com.example.readinglog.common.error.BadGatewayException;
 import com.example.readinglog.common.error.ServiceUnavailableException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -58,14 +60,20 @@ public class GoogleBooksClient implements BookCatalog {
               .get()
               .uri(
                   uri -> {
+                    // The user's text goes in as a URI variable, never into the template itself:
+                    // only variables are fully encoded, so "C++" stays "C++" rather than reaching
+                    // Google as "C  ", and "{x}" is searched for rather than read as a variable.
+                    Map<String, Object> variables = new HashMap<>();
+                    variables.put("q", query);
                     uri.path("/volumes")
-                        .queryParam("q", query)
+                        .queryParam("q", "{q}")
                         .queryParam("maxResults", MAX_RESULTS)
                         .queryParam("printType", "books");
                     if (apiKey != null && !apiKey.isBlank()) {
-                      uri.queryParam("key", apiKey);
+                      uri.queryParam("key", "{key}");
+                      variables.put("key", apiKey);
                     }
-                    return uri.build();
+                    return uri.build(variables);
                   })
               .retrieve()
               .body(Volumes.class);
