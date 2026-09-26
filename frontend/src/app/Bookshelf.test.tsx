@@ -20,7 +20,7 @@ const NO_BOOKS = { READING: 0, WANT_TO_READ: 0, DONE: 0 };
 
 describe("Bookshelf", () => {
   it("prompts for a first book when the shelf is empty", () => {
-    render(<Bookshelf books={[]} counts={NO_BOOKS} filter={undefined} />);
+    render(<Bookshelf books={[]} total={0} counts={NO_BOOKS} filter={undefined} page={1} />);
 
     expect(screen.getByText(/まだ本がありません/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "最初の 1 冊を登録する" })).toHaveAttribute(
@@ -32,7 +32,13 @@ describe("Bookshelf", () => {
 
   it("says a filter matched nothing instead of claiming the shelf is empty", () => {
     render(
-      <Bookshelf books={[]} counts={{ READING: 0, WANT_TO_READ: 2, DONE: 0 }} filter="READING" />,
+      <Bookshelf
+        books={[]}
+        total={0}
+        counts={{ READING: 0, WANT_TO_READ: 2, DONE: 0 }}
+        filter="READING"
+        page={1}
+      />,
     );
 
     expect(screen.getByText("読書中の本はありません。")).toBeInTheDocument();
@@ -43,8 +49,10 @@ describe("Bookshelf", () => {
     render(
       <Bookshelf
         books={[]}
+        total={0}
         counts={NO_BOOKS}
         filter={undefined}
+        page={1}
         error="本の一覧を取得できませんでした。"
       />,
     );
@@ -57,8 +65,10 @@ describe("Bookshelf", () => {
     render(
       <Bookshelf
         books={[book({ id: 1, title: "新しい本" }), book({ id: 2, title: "古い本" })]}
+        total={2}
         counts={{ READING: 0, WANT_TO_READ: 2, DONE: 0 }}
         filter={undefined}
+        page={1}
       />,
     );
 
@@ -75,8 +85,10 @@ describe("Bookshelf", () => {
           book({ id: 2, status: "READING" }),
           book({ id: 3, status: "DONE" }),
         ]}
+        total={3}
         counts={{ READING: 1, WANT_TO_READ: 1, DONE: 1 }}
         filter={undefined}
+        page={1}
       />,
     );
 
@@ -93,8 +105,10 @@ describe("Bookshelf", () => {
           book({ id: 1, status: "READING", totalPages: 400, currentPage: 100 }),
           book({ id: 2, status: "DONE", totalPages: 344, currentPage: 344 }),
         ]}
+        total={2}
         counts={{ READING: 1, WANT_TO_READ: 0, DONE: 1 }}
         filter={undefined}
+        page={1}
       />,
     );
 
@@ -106,8 +120,10 @@ describe("Bookshelf", () => {
     render(
       <Bookshelf
         books={[book({ status: "READING", totalPages: null, currentPage: 10 })]}
+        total={1}
         counts={{ READING: 1, WANT_TO_READ: 0, DONE: 0 }}
         filter={undefined}
+        page={1}
       />,
     );
 
@@ -118,8 +134,10 @@ describe("Bookshelf", () => {
     render(
       <Bookshelf
         books={[book({ status: "DONE" })]}
+        total={1}
         counts={{ READING: 2, WANT_TO_READ: 1, DONE: 1 }}
         filter="DONE"
+        page={1}
       />,
     );
 
@@ -131,5 +149,74 @@ describe("Bookshelf", () => {
     );
     expect(filters.getByRole("link", { name: "読了 1" })).toHaveAttribute("aria-current", "page");
     expect(filters.getByRole("link", { name: "すべて 4" })).not.toHaveAttribute("aria-current");
+  });
+  it("hides the page links when every book fits on one page", () => {
+    render(
+      <Bookshelf
+        books={[book()]}
+        total={20}
+        counts={{ READING: 0, WANT_TO_READ: 20, DONE: 0 }}
+        filter={undefined}
+        page={1}
+      />,
+    );
+
+    expect(screen.queryByRole("navigation", { name: "本棚のページ" })).not.toBeInTheDocument();
+  });
+
+  it("links to the next page, keeping the filter, from the first of several", () => {
+    render(
+      <Bookshelf
+        books={[book()]}
+        total={21}
+        counts={{ READING: 0, WANT_TO_READ: 21, DONE: 0 }}
+        filter="WANT_TO_READ"
+        page={1}
+      />,
+    );
+
+    const pages = within(screen.getByRole("navigation", { name: "本棚のページ" }));
+    expect(pages.getByText("1 / 2 ページ")).toBeInTheDocument();
+    expect(pages.getByRole("link", { name: "次へ →" })).toHaveAttribute(
+      "href",
+      "/?status=WANT_TO_READ&page=2",
+    );
+    expect(pages.queryByRole("link", { name: "← 前へ" })).not.toBeInTheDocument();
+  });
+
+  it("links back to the previous page, and not onwards, from the last page", () => {
+    render(
+      <Bookshelf
+        books={[book()]}
+        total={41}
+        counts={{ READING: 0, WANT_TO_READ: 41, DONE: 0 }}
+        filter={undefined}
+        page={3}
+      />,
+    );
+
+    const pages = within(screen.getByRole("navigation", { name: "本棚のページ" }));
+    expect(pages.getByText("3 / 3 ページ")).toBeInTheDocument();
+    expect(pages.getByRole("link", { name: "← 前へ" })).toHaveAttribute("href", "/?page=2");
+    expect(pages.queryByRole("link", { name: "次へ →" })).not.toBeInTheDocument();
+  });
+
+  it("points back to the first page when the page asked for is past the end", () => {
+    render(
+      <Bookshelf
+        books={[]}
+        total={3}
+        counts={{ READING: 3, WANT_TO_READ: 0, DONE: 0 }}
+        filter="READING"
+        page={9}
+      />,
+    );
+
+    expect(screen.getByText(/このページに本はありません/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "最初のページへ" })).toHaveAttribute(
+      "href",
+      "/?status=READING",
+    );
+    expect(screen.queryByText(/読書中の本はありません/)).not.toBeInTheDocument();
   });
 });

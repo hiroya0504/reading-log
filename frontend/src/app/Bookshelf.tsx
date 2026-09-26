@@ -1,15 +1,20 @@
 import Link from "next/link";
 import type { Book, BookStatus } from "@/lib/api/books";
 import { progressPercent } from "./ProgressBar";
+import { SHELF_PAGE_SIZE, pageCount, shelfHref } from "./shelf";
 import { BookCover } from "./ui/BookCover";
 import { STATUSES, STATUS_CHIP_CLASSES, STATUS_LABELS } from "./ui/status";
 import { sectionHeading } from "./ui/styles";
 
 type Props = {
-  /** Already narrowed to `filter`; the counts are over the whole shelf. */
+  /** One page, already narrowed to `filter` by the backend. */
   books: Book[];
+  /** How many books match `filter` in all, across every page. */
+  total: number;
+  /** Per status over the whole shelf, for the filter links. */
   counts: Record<BookStatus, number>;
   filter: BookStatus | undefined;
+  page: number;
   error?: string;
 };
 
@@ -17,8 +22,8 @@ type Props = {
  * Presentational only — it receives books and renders them. Keeping the fetch in the page is what
  * lets this be tested without standing up the API.
  */
-export function Bookshelf({ books, counts, filter, error }: Props) {
-  const total = counts.READING + counts.WANT_TO_READ + counts.DONE;
+export function Bookshelf({ books, total, counts, filter, page, error }: Props) {
+  const all = counts.READING + counts.WANT_TO_READ + counts.DONE;
 
   return (
     <section aria-labelledby="bookshelf" className="flex flex-col gap-5">
@@ -28,31 +33,35 @@ export function Bookshelf({ books, counts, filter, error }: Props) {
         </h2>
         {error === undefined && (
           <nav aria-label="状態で絞り込む" className="flex flex-wrap gap-1">
-            <FilterLink href="/" current={filter === undefined}>
-              すべて {total}
+            <FilterLink href={shelfHref(undefined, 1)} current={filter === undefined}>
+              すべて {all}
             </FilterLink>
             {STATUSES.map((status) => (
-              <FilterLink key={status} href={`/?status=${status}`} current={filter === status}>
+              <FilterLink key={status} href={shelfHref(status, 1)} current={filter === status}>
                 {STATUS_LABELS[status]} {counts[status]}
               </FilterLink>
             ))}
           </nav>
         )}
       </div>
-      <ShelfBody books={books} total={total} filter={filter} error={error} />
+      <ShelfBody books={books} all={all} total={total} filter={filter} page={page} error={error} />
     </section>
   );
 }
 
 function ShelfBody({
   books,
+  all,
   total,
   filter,
+  page,
   error,
 }: {
   books: Book[];
+  all: number;
   total: number;
   filter: BookStatus | undefined;
+  page: number;
   error?: string;
 }) {
   // "Could not read the shelf" and "there are no books" must not look alike: telling someone their
@@ -67,7 +76,7 @@ function ShelfBody({
       </p>
     );
   }
-  if (total === 0) {
+  if (all === 0) {
     return (
       <p className="rounded-md border border-dashed border-line p-8 text-center text-sm text-muted">
         まだ本がありません。
@@ -77,13 +86,33 @@ function ShelfBody({
       </p>
     );
   }
-  if (books.length === 0) {
+  if (total === 0) {
     return (
       <p className="rounded-md border border-dashed border-line p-8 text-center text-sm text-muted">
         {filter === undefined ? "" : STATUS_LABELS[filter]}の本はありません。
       </p>
     );
   }
+  // Only a hand-edited or stale URL gets here: a page past the end of a shelf that has books.
+  if (books.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-line p-8 text-center text-sm text-muted">
+        このページに本はありません。
+        <Link href={shelfHref(filter, 1)} className="text-accent underline">
+          最初のページへ
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <>
+      <BookGrid books={books} />
+      <Pagination filter={filter} page={page} pages={pageCount(total, SHELF_PAGE_SIZE)} />
+    </>
+  );
+}
+
+function BookGrid({ books }: { books: Book[] }) {
   return (
     <ul
       aria-label="本棚の本"
@@ -106,6 +135,42 @@ function ShelfBody({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Hidden when everything fits on one page. */
+function Pagination({
+  filter,
+  page,
+  pages,
+}: {
+  filter: BookStatus | undefined;
+  page: number;
+  pages: number;
+}) {
+  if (pages <= 1) {
+    return null;
+  }
+  return (
+    <nav aria-label="本棚のページ" className="flex items-center justify-center gap-4 text-sm">
+      {page > 1 ? (
+        <Link href={shelfHref(filter, page - 1)} className="text-accent hover:underline">
+          ← 前へ
+        </Link>
+      ) : (
+        <span className="text-muted opacity-50">← 前へ</span>
+      )}
+      <span className="text-muted" aria-current="page">
+        {page} / {pages} ページ
+      </span>
+      {page < pages ? (
+        <Link href={shelfHref(filter, page + 1)} className="text-accent hover:underline">
+          次へ →
+        </Link>
+      ) : (
+        <span className="text-muted opacity-50">次へ →</span>
+      )}
+    </nav>
   );
 }
 

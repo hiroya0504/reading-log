@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countByStatus, filterByStatus, parseStatusFilter } from "./shelf";
-import type { Book } from "@/lib/api/books";
-
-function book(id: number, status: Book["status"]): Book {
-  return { id, title: "t", author: null, isbn: null, totalPages: null, currentPage: 0, status };
-}
+import { firstFailure, pageCount, parsePage, parseStatusFilter, shelfHref } from "./shelf";
 
 describe("parseStatusFilter", () => {
   it.each(["READING", "WANT_TO_READ", "DONE"])("accepts %j", (raw) => {
@@ -20,24 +15,57 @@ describe("parseStatusFilter", () => {
   });
 });
 
-describe("countByStatus", () => {
-  it("counts each status, including the ones with no books", () => {
-    expect(countByStatus([book(1, "READING"), book(2, "DONE"), book(3, "READING")])).toEqual({
-      READING: 2,
-      WANT_TO_READ: 0,
-      DONE: 1,
-    });
+describe("parsePage", () => {
+  it.each([
+    ["1", 1],
+    ["2", 2],
+    ["120", 120],
+  ])("reads %j as page %d", (raw, page) => {
+    expect(parsePage(raw)).toBe(page);
+  });
+
+  // "0" is the one below the first page; the rest are what `Number()` would have let through.
+  it.each([undefined, "0", "", "-1", "1.5", "abc", " 2"])("falls back to page 1 for %j", (raw) => {
+    expect(parsePage(raw)).toBe(1);
+  });
+
+  it("falls back to page 1 when the parameter is repeated", () => {
+    expect(parsePage(["2", "3"])).toBe(1);
   });
 });
 
-describe("filterByStatus", () => {
-  const books = [book(1, "READING"), book(2, "DONE"), book(3, "READING")];
+describe("pageCount", () => {
+  it.each([
+    [0, 1],
+    [1, 1],
+    [20, 1],
+    [21, 2],
+    [40, 2],
+    [41, 3],
+  ])("fits %d books into %d page(s) of 20", (total, pages) => {
+    expect(pageCount(total, 20)).toBe(pages);
+  });
+});
 
-  it("keeps only the books with the status, in their original order", () => {
-    expect(filterByStatus(books, "READING").map((b) => b.id)).toEqual([1, 3]);
+describe("shelfHref", () => {
+  it.each([
+    [undefined, 1, "/"],
+    [undefined, 2, "/?page=2"],
+    ["READING", 1, "/?status=READING"],
+    ["DONE", 3, "/?status=DONE&page=3"],
+  ] as const)("links status %j page %d to %j", (status, page, href) => {
+    expect(shelfHref(status, page)).toBe(href);
+  });
+});
+
+describe("firstFailure", () => {
+  it("is undefined when every read succeeded", () => {
+    expect(firstFailure({ ok: true }, { ok: true })).toBeUndefined();
   });
 
-  it("keeps every book when there is no status to filter by", () => {
-    expect(filterByStatus(books, undefined)).toEqual(books);
+  it("gives the message of the first read that failed", () => {
+    expect(
+      firstFailure({ ok: true }, { ok: false, message: "一覧" }, { ok: false, message: "冊数" }),
+    ).toBe("一覧");
   });
 });

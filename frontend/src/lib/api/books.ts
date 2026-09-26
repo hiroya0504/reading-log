@@ -81,27 +81,52 @@ function problemMessage(error: unknown, fallback: string): string {
  * a throw here would replace all three with Next.js's error page, so a failure to read the list
  * would also take away the form the user could still use.
  */
-export type ListBooksResult = { ok: true; books: Book[] } | { ok: false; message: string };
+export type ListBooksResult =
+  { ok: true; books: Book[]; total: number } | { ok: false; message: string };
 
-export async function listBooks(): Promise<ListBooksResult> {
+/** Omitted fields fall back to the backend's defaults: every status, its default page size. */
+export type ListBooksQuery = { status?: BookStatus; limit?: number; offset?: number };
+
+/** `total` counts every book under the same filter, not just this page. */
+export async function listBooks(query: ListBooksQuery = {}): Promise<ListBooksResult> {
   try {
-    const { data, error } = await api.GET("/api/books");
+    const { data, error } = await api.GET("/api/books", { params: { query } });
     // `!data?.items` is not redundant with `error`. openapi-fetch leaves `error` falsy when a
     // non-ok response carries no body — `undefined` for `Content-Length: 0`, `""` when the body is
     // empty — and Spring Security's 401 is exactly that shape. Guarding on `error` alone would turn
     // a rejected request into `{ ok: true, books: [] }`, which the UI renders as "no books yet":
     // a failure that reads as data loss. `items` is `required` in the contract, so its absence is
     // a broken response rather than an empty shelf.
-    if (error || !data?.items) {
+    // `total` likewise: a missing one would turn into a shelf with no pages.
+    if (error || !data?.items || typeof data.total !== "number") {
       return { ok: false, message: problemMessage(error, "本の一覧を取得できませんでした。") };
     }
-    return { ok: true, books: data.items.map(toBook) };
+    return { ok: true, books: data.items.map(toBook), total: data.total };
   } catch {
     // The backend not running at all is the common case in local development. Worded differently
     // from the guard above so the two are distinguishable — both to the user (a request that was
     // answered and rejected is not the same as one that never arrived) and to the tests: with one
     // shared message, deleting the guard would leave every case falling through to here and no
     // test could tell. `createBook` splits them the same way.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
+export type CountBooksResult =
+  { ok: true; counts: Record<BookStatus, number> } | { ok: false; message: string };
+
+/** Keyed by status here so the UI can look a count up with the status it already has. */
+export async function countBooksByStatus(): Promise<CountBooksResult> {
+  try {
+    const { data, error } = await api.GET("/api/books/counts");
+    if (error || !data) {
+      return { ok: false, message: problemMessage(error, "本の冊数を取得できませんでした。") };
+    }
+    return {
+      ok: true,
+      counts: { WANT_TO_READ: data.wantToRead, READING: data.reading, DONE: data.done },
+    };
+  } catch {
     return { ok: false, message: "バックエンドに接続できませんでした。" };
   }
 }
