@@ -1,7 +1,9 @@
+import Link from "next/link";
+import { Bookshelf } from "./Bookshelf";
 import { HealthBadge } from "./HealthBadge";
-import { BookForm } from "./BookForm";
-import { BookList } from "./BookList";
-import { createBookAction } from "./actions";
+import { ReadingNow } from "./ReadingNow";
+import { countByStatus, filterByStatus, parseStatusFilter } from "./shelf";
+import { buttonPrimary } from "./ui/styles";
 import { getHealth } from "@/lib/api/health";
 import { listBooks } from "@/lib/api/books";
 
@@ -9,23 +11,42 @@ import { listBooks } from "@/lib/api/books";
 // Without this the build would try to prerender it and CI would depend on a live API.
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string | string[] }>;
+}) {
+  const filter = parseStatusFilter((await searchParams).status);
   // Both are asked unconditionally. Gating the list on the health check would not protect it —
   // `/api/health` is a static response that never touches the database, so it stays "ok" while
   // `/api/books` is failing. `listBooks` reports its own failure instead of throwing.
-  const [status, books] = await Promise.all([getHealth(), listBooks()]);
+  const [status, result] = await Promise.all([getHealth(), listBooks()]);
+  const books = result.ok ? result.books : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold">reading-log</h1>
-        <p className="text-sm opacity-70">読んだ本を記録する。</p>
-        <HealthBadge status={status} />
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-5 py-10 sm:px-8 sm:py-14">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="font-serif text-[32px] font-bold tracking-wide">reading-log</h1>
+          <p className="text-sm text-muted">読んだ本と、いま読んでいる本の記録</p>
+        </div>
+        <Link href="/books/new" className={buttonPrimary}>
+          本を登録する
+        </Link>
       </header>
 
-      <BookForm action={createBookAction} />
+      <ReadingNow books={filterByStatus(books, "READING")} />
 
-      {books.ok ? <BookList books={books.books} /> : <BookList books={[]} error={books.message} />}
+      <Bookshelf
+        books={filterByStatus(books, filter)}
+        counts={countByStatus(books)}
+        filter={filter}
+        error={result.ok ? undefined : result.message}
+      />
+
+      <footer className="mt-auto">
+        <HealthBadge status={status} />
+      </footer>
     </main>
   );
 }
