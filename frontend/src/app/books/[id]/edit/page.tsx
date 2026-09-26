@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookForm } from "../../../BookForm";
 import { updateBookAction } from "../../../actions";
-import { parseBookId } from "../book-id";
+import { isMissingBook, parseBookId } from "../book-id";
 import { getBook } from "@/lib/api/books";
 
 // Rendered per request for the same reason as the home page: it reads from the backend.
@@ -15,7 +15,7 @@ export default async function EditBookPage({ params }: { params: Promise<{ id: s
   }
 
   const result = await getBook(id);
-  if (!result.ok && result.notFound) {
+  if (isMissingBook(result)) {
     notFound();
   }
 

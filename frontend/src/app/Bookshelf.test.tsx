@@ -186,6 +186,23 @@ describe("Bookshelf", () => {
     expect(pages.queryByRole("link", { name: "← 前へ" })).not.toBeInTheDocument();
   });
 
+  // Page 2 is the first page with a way back, so it is where `page > 1` shows its edge.
+  it("links back to the first page, without a page number, from the second", () => {
+    render(
+      <Bookshelf
+        books={[book()]}
+        total={41}
+        counts={{ READING: 0, WANT_TO_READ: 41, DONE: 0 }}
+        filter={undefined}
+        page={2}
+      />,
+    );
+
+    const pages = within(screen.getByRole("navigation", { name: "本棚のページ" }));
+    expect(pages.getByRole("link", { name: "← 前へ" })).toHaveAttribute("href", "/");
+    expect(pages.getByRole("link", { name: "次へ →" })).toHaveAttribute("href", "/?page=3");
+  });
+
   it("links back to the previous page, and not onwards, from the last page", () => {
     render(
       <Bookshelf

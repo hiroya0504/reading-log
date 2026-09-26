@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { isInaccessible, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BookCover, COVER_COLORS, coverColor } from "./BookCover";
 
@@ -21,6 +21,13 @@ describe("BookCover", () => {
 
     expect(screen.getByText("リファクタリング")).toBeInTheDocument();
     expect(screen.getByText("Martin Fowler")).toBeInTheDocument();
+  });
+
+  // The title is always printed beside the cover or named by the link around it.
+  it("is hidden from assistive technology so the title is not read twice", () => {
+    render(<BookCover book={{ id: 1, title: "リファクタリング", author: null }} size="md" />);
+
+    expect(isInaccessible(screen.getByText("リファクタリング"))).toBe(true);
   });
 
   it("leaves the author off the small cover, where it would not fit", () => {

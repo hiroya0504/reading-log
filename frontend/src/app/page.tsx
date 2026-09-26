@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Bookshelf } from "./Bookshelf";
 import { HealthBadge } from "./HealthBadge";
 import { ReadingNow } from "./ReadingNow";
-import { SHELF_PAGE_SIZE, firstFailure, parsePage, parseStatusFilter } from "./shelf";
+import { SHELF_PAGE_SIZE, firstFailure, parsePage, parseStatusFilter, shelfOffset } from "./shelf";
 import { buttonPrimary } from "./ui/styles";
 import { getHealth } from "@/lib/api/health";
 import { countBooksByStatus, listBooks } from "@/lib/api/books";
@@ -29,7 +29,7 @@ export default async function Home({
   // `/api/books` is failing. Each call reports its own failure instead of throwing.
   const [status, shelf, reading, counts] = await Promise.all([
     getHealth(),
-    listBooks({ status: filter, limit: SHELF_PAGE_SIZE, offset: (page - 1) * SHELF_PAGE_SIZE }),
+    listBooks({ status: filter, limit: SHELF_PAGE_SIZE, offset: shelfOffset(page) }),
     listBooks({ status: "READING", limit: READING_NOW_LIMIT }),
     countBooksByStatus(),
   ]);

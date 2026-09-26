@@ -154,6 +154,12 @@ describe("countBooksByStatus", () => {
     expect(result).toEqual({ ok: true, counts: { WANT_TO_READ: 3, READING: 2, DONE: 10 } });
   });
 
+  it("surfaces the backend's message", async () => {
+    GET.mockResolvedValue({ error: { detail: "Something broke" } });
+
+    expect(await countBooksByStatus()).toEqual({ ok: false, message: "Something broke" });
+  });
+
   it("does not read a bodyless failure as an empty shelf", async () => {
     GET.mockResolvedValue({ error: undefined, data: undefined });
 

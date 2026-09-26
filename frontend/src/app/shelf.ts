@@ -28,6 +28,11 @@ export function parsePage(raw: string | string[] | undefined): number {
   return page >= 1 ? page : 1;
 }
 
+/** How many books come before the given page (counted from 1). */
+export function shelfOffset(page: number): number {
+  return (page - 1) * SHELF_PAGE_SIZE;
+}
+
 /** At least one page, so an empty shelf still reads "1 / 1". */
 export function pageCount(total: number, pageSize: number): number {
   return Math.max(1, Math.ceil(total / pageSize));

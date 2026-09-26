@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { firstFailure, pageCount, parsePage, parseStatusFilter, shelfHref } from "./shelf";
+import {
+  firstFailure,
+  pageCount,
+  parsePage,
+  parseStatusFilter,
+  shelfHref,
+  shelfOffset,
+} from "./shelf";
 
 describe("parseStatusFilter", () => {
   it.each(["READING", "WANT_TO_READ", "DONE"])("accepts %j", (raw) => {
@@ -67,5 +74,15 @@ describe("firstFailure", () => {
     expect(
       firstFailure({ ok: true }, { ok: false, message: "一覧" }, { ok: false, message: "冊数" }),
     ).toBe("一覧");
+  });
+});
+
+describe("shelfOffset", () => {
+  it.each([
+    [1, 0],
+    [2, 20],
+    [3, 40],
+  ])("skips the books before page %d (%d)", (page, offset) => {
+    expect(shelfOffset(page)).toBe(offset);
   });
 });

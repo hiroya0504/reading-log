@@ -5,7 +5,7 @@ import { BookCover } from "../../ui/BookCover";
 import { authorLabel, bookInfoRows } from "../../ui/book-info";
 import { buttonSecondary, sectionHeading } from "../../ui/styles";
 import { DeleteBookButton } from "./DeleteBookButton";
-import { parseBookId } from "./book-id";
+import { isMissingBook, parseBookId } from "./book-id";
 import { ProgressForm } from "./ProgressForm";
 import { StatusSwitcher } from "./StatusSwitcher";
 import { getBook, type Book } from "@/lib/api/books";
@@ -20,7 +20,7 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
   }
 
   const result = await getBook(id);
-  if (!result.ok && result.notFound) {
+  if (isMissingBook(result)) {
     notFound();
   }
 
