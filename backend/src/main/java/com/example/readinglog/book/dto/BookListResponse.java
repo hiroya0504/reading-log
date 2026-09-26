@@ -15,4 +15,9 @@ import java.util.List;
  */
 public record BookListResponse(
     @Schema(description = "登録日時の新しい順。", requiredMode = RequiredMode.REQUIRED)
-        List<BookResponse> items) {}
+        List<BookResponse> items,
+    @Schema(
+            description = "同じ絞り込みでの全件数。limit / offset に関係しない。ページ送りに使う。",
+            example = "42",
+            requiredMode = RequiredMode.REQUIRED)
+        long total) {}

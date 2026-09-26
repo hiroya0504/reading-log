@@ -7,6 +7,7 @@ import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookProgressUpdateRequest;
 import com.example.readinglog.book.dto.BookResponse;
+import com.example.readinglog.book.dto.BookStatusCountsResponse;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.stream.Stream;
@@ -89,6 +90,10 @@ class BookApiTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     return response.getBody();
+  }
+
+  private BookResponse createWithStatus(TestRestTemplate client, String title, BookStatus status) {
+    return create(client, new BookCreateRequest(title, null, null, null, status));
   }
 
   private BookResponse createWithPages(int totalPages) {
@@ -267,12 +272,119 @@ class BookApiTest {
       assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
     }
 
+    /** The shelf filter on the frontend relies on this; without it a page mixes every status. */
+    @Test
+    void statusFilterReturnsOnlyThatStatus() {
+      createWithStatus(asDev(), "読書中 1", BookStatus.READING);
+      createWithStatus(asDev(), "読了", BookStatus.DONE);
+      createWithStatus(asDev(), "読書中 2", BookStatus.READING);
+
+      BookListResponse body = list(asDev(), "?status=READING");
+
+      assertThat(body.items()).extracting(BookResponse::title).containsExactly("読書中 2", "読書中 1");
+      assertThat(body.total()).isEqualTo(2);
+    }
+
+    /** Owner scoping on the filtered path: the status condition must not replace the owner one. */
+    @Test
+    void statusFilterNeverReturnsAnotherUsersBooks() {
+      createWithStatus(asDev(), "dev の本", BookStatus.READING);
+      createWithStatus(asOther(), "other の本", BookStatus.READING);
+
+      BookListResponse body = list(asDev(), "?status=READING");
+
+      assertThat(body.items()).extracting(BookResponse::title).containsExactly("dev の本");
+      assertThat(body.total()).isEqualTo(1);
+    }
+
+    /**
+     * {@code total} counts every matching book, not the page: the frontend derives the number of
+     * pages from it. Hard-code it to {@code items.size()} and this fails.
+     */
+    @Test
+    void totalCountsEveryBookRegardlessOfPaging() {
+      create(asDev(), "1 冊目");
+      create(asDev(), "2 冊目");
+      create(asDev(), "3 冊目");
+
+      BookListResponse body = list(asDev(), "?limit=2&offset=0");
+
+      assertThat(body.items()).hasSize(2);
+      assertThat(body.total()).isEqualTo(3);
+    }
+
+    @Test
+    void totalExcludesAnotherUsersBooks() {
+      create(asDev(), "dev の本");
+      create(asOther(), "other の本");
+
+      assertThat(list(asDev(), "").total()).isEqualTo(1);
+    }
+
+    /** An unknown status must be a client error, not an unfiltered list or a 500. */
+    @Test
+    void unknownStatusFilterIsRejected() {
+      ResponseEntity<JsonNode> response =
+          asDev().getForEntity("/api/books?status=NOPE", JsonNode.class);
+
+      assertProblemDetail(response, HttpStatus.BAD_REQUEST, "BAD_REQUEST");
+    }
+
     @Test
     void negativeOffsetIsRejected() {
       ResponseEntity<JsonNode> response =
           asDev().getForEntity("/api/books?offset=-1", JsonNode.class);
 
       assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    }
+  }
+
+  @Nested
+  class CountBooks {
+
+    private BookStatusCountsResponse counts(TestRestTemplate client) {
+      ResponseEntity<BookStatusCountsResponse> response =
+          client.getForEntity("/api/books/counts", BookStatusCountsResponse.class);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+      return response.getBody();
+    }
+
+    /** A status with no books is 0, not missing: the GROUP BY returns no row for it. */
+    @Test
+    void countsEachStatusIncludingTheOnesWithNoBooks() {
+      createWithStatus(asDev(), "読書中 1", BookStatus.READING);
+      createWithStatus(asDev(), "読書中 2", BookStatus.READING);
+      createWithStatus(asDev(), "読了", BookStatus.DONE);
+
+      assertThat(counts(asDev()))
+          .extracting(
+              BookStatusCountsResponse::wantToRead,
+              BookStatusCountsResponse::reading,
+              BookStatusCountsResponse::done)
+          .containsExactly(0L, 2L, 1L);
+    }
+
+    /** Owner scoping on the counts: another user's books are not counted. */
+    @Test
+    void countsOnlyTheOwnersBooks() {
+      createWithStatus(asDev(), "dev の本", BookStatus.READING);
+      createWithStatus(asOther(), "other の本", BookStatus.READING);
+      createWithStatus(asOther(), "other の本 2", BookStatus.DONE);
+
+      assertThat(counts(asDev()))
+          .extracting(
+              BookStatusCountsResponse::wantToRead,
+              BookStatusCountsResponse::reading,
+              BookStatusCountsResponse::done)
+          .containsExactly(0L, 1L, 0L);
+    }
+
+    @Test
+    void countsRequireAuthentication() {
+      ResponseEntity<String> response =
+          restTemplate.getForEntity("/api/books/counts", String.class);
+
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
   }
 

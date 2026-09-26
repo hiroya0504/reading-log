@@ -4,6 +4,7 @@ import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookProgressUpdateRequest;
 import com.example.readinglog.book.dto.BookResponse;
+import com.example.readinglog.book.dto.BookStatusCountsResponse;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,6 +47,8 @@ public class BookController {
       summary = "List the authenticated user's books, newest first.")
   @GetMapping("/books")
   public BookListResponse list(
+      @Parameter(description = "この読書状態の本だけを返す。省略するとすべて。") @RequestParam(required = false)
+          BookStatus status,
       @Parameter(description = "1 ページの件数。1〜" + MAX_LIMIT + "。")
           @Schema(minimum = "1", maximum = "" + MAX_LIMIT, defaultValue = "" + DEFAULT_LIMIT)
           @RequestParam(defaultValue = "" + DEFAULT_LIMIT)
@@ -54,9 +57,17 @@ public class BookController {
           @Schema(minimum = "0", defaultValue = "0")
           @RequestParam(defaultValue = "0")
           int offset) {
-    List<BookResponse> items =
-        bookService.list(limit, offset).stream().map(BookResponse::from).toList();
-    return new BookListResponse(items);
+    BookPage page = bookService.list(status, limit, offset);
+    List<BookResponse> items = page.items().stream().map(BookResponse::from).toList();
+    return new BookListResponse(items, page.total());
+  }
+
+  @Operation(
+      operationId = "countBooksByStatus",
+      summary = "Count the authenticated user's books per reading status.")
+  @GetMapping("/books/counts")
+  public BookStatusCountsResponse countByStatus() {
+    return BookStatusCountsResponse.from(bookService.countByStatus());
   }
 
   // @ResponseStatus is redundant at runtime (the ResponseEntity sets 201) but is what makes
