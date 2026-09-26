@@ -7,8 +7,12 @@
 // Called from actions/github-script in .github/workflows/ai-review.yml. The pure functions are
 // exported separately so post-review.test.js can exercise them without GitHub.
 
+const fs = require('node:fs');
+
 const MAX_INLINE = 5;
 const SEVERITY_ORDER = { high: 0, medium: 1 };
+const SEVERITY_LABEL = { high: '🔴 high', medium: '🟡 medium' };
+const RULES_PATH = '.claude/skills/ai-review/references/rules.md';
 const FOOTER = '🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要';
 
 /**
@@ -75,25 +79,58 @@ function partition(findings, commentableByFile, max = MAX_INLINE) {
   return { inline, outOfDiff, overflow };
 }
 
-function inlineBody(f) {
+/**
+ * Rule titles from the "## <RULE_ID> <title>" headings in rules.md, so a comment can say what
+ * DEF-001 means. A missing or unreadable file only costs the titles, never the review.
+ */
+function parseRuleTitles(markdown) {
+  const titles = new Map();
+  for (const m of (markdown || '').matchAll(/^## ([A-Z]+-\d+)\s+(.+)$/gm)) {
+    titles.set(m[1], m[2].trim());
+  }
+  return titles;
+}
+
+function ruleLabel(f, titles) {
+  const title = titles.get(f.rule_id);
+  return title ? `\`${f.rule_id}\` ${title}` : `\`${f.rule_id}\``;
+}
+
+// The marker must stay on the first line: review_metrics.py reads it from the thread's first comment.
+function inlineBody(f, titles = new Map()) {
   return [
     `<!-- ai-review:rule=${f.rule_id} -->`,
-    `**${f.rule_id}**（${f.severity}）`,
+    `**重要度**：${SEVERITY_LABEL[f.severity] ?? f.severity}　**ルール**：${ruleLabel(f, titles)}`,
+    '',
+    '#### 指摘',
     '',
     f.issue,
     '',
-    `**修正案**: ${f.suggestion}`,
+    '#### 修正案',
+    '',
+    f.suggestion,
     '',
     '---',
     FOOTER,
   ].join('\n');
 }
 
-function summaryLine(f) {
-  return `- **${f.rule_id}**（${f.severity}）\`${f.file}:${f.line}\` ${f.issue}\n  - 修正案: ${f.suggestion}`;
+function summaryLine(f, titles = new Map()) {
+  return [
+    `- ${SEVERITY_LABEL[f.severity] ?? f.severity}　${ruleLabel(f, titles)}　\`${f.file}:${f.line}\``,
+    `  - **指摘**：${f.issue}`,
+    `  - **修正案**：${f.suggestion}`,
+  ].join('\n');
 }
 
-function summaryBody({ detectedCount, failedGroups = 0, findings, parts, rulesSha }) {
+function summaryBody({
+  detectedCount,
+  failedGroups = 0,
+  findings,
+  parts,
+  rulesSha,
+  titles = new Map(),
+}) {
   const out = [
     `<!-- ai-review:summary rules=${rulesSha} -->`,
     '## 🤖 AIレビュー',
@@ -118,7 +155,7 @@ function summaryBody({ detectedCount, failedGroups = 0, findings, parts, rulesSh
       '',
       'コメントできない行（差分に含まれない行）への指摘です。',
       '',
-      ...parts.outOfDiff.map(summaryLine),
+      ...parts.outOfDiff.map((f) => summaryLine(f, titles)),
     );
   }
   if (parts.overflow.length > 0) {
@@ -128,7 +165,7 @@ function summaryBody({ detectedCount, failedGroups = 0, findings, parts, rulesSh
       '',
       `インラインコメントは重要度順に最大 ${MAX_INLINE} 件までです。`,
       '',
-      ...parts.overflow.map(summaryLine),
+      ...parts.overflow.map((f) => summaryLine(f, titles)),
     );
   }
   return out.join('\n');
@@ -188,12 +225,19 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
   const commentableByFile = new Map(files.map((f) => [f.filename, parsePatch(f.patch)]));
 
   const parts = partition(data.findings, commentableByFile);
+  let titles = new Map();
+  try {
+    titles = parseRuleTitles(fs.readFileSync(RULES_PATH, 'utf8'));
+  } catch (e) {
+    core.warning(`${RULES_PATH} を読めないため、ルール名を省略します: ${e.message}`);
+  }
   const body = summaryBody({
     detectedCount: data.detected_count,
     failedGroups: data.failed_groups,
     findings: data.findings,
     parts,
     rulesSha: rulesSha || 'unknown',
+    titles,
   });
 
   // One createReview call so the author gets one notification, not one per comment.
@@ -208,7 +252,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
       path: f.file,
       line: f.line,
       side: 'RIGHT',
-      body: inlineBody(f),
+      body: inlineBody(f, titles),
     })),
   });
 
@@ -246,6 +290,7 @@ module.exports = {
   parsePatch,
   partition,
   sortFindings,
+  parseRuleTitles,
   parseOutput,
   inlineBody,
   summaryBody,

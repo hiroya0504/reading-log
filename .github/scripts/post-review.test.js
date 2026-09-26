@@ -8,6 +8,7 @@ const {
   parseOutput,
   inlineBody,
   summaryBody,
+  parseRuleTitles,
   MAX_INLINE,
 } = require('./post-review.js');
 
@@ -96,12 +97,30 @@ test('partition: high before medium, then file and line; cap at MAX_INLINE', () 
   );
 });
 
-test('inlineBody: marker first, then rule, issue, suggestion, footer', () => {
-  const body = inlineBody(finding({ rule_id: 'DEF-001', severity: 'high' }));
-  assert.ok(body.startsWith('<!-- ai-review:rule=DEF-001 -->\n'));
-  assert.match(body, /\*\*DEF-001\*\*（high）/);
-  assert.match(body, /修正案/);
+test('parseRuleTitles: reads "## <RULE_ID> <title>" headings only', () => {
+  const titles = parseRuleTitles(
+    ['# AIレビュー ルール定義', '## 共通ルール', '## DEF-001 自己呼び出し', '### 指摘すること', '## SEC-001 MyBatis の `${}`'].join('\n'),
+  );
+  assert.deepEqual([...titles], [
+    ['DEF-001', '自己呼び出し'],
+    ['SEC-001', 'MyBatis の `${}`'],
+  ]);
+});
+
+test('inlineBody: marker first, then severity and rule, issue and suggestion sections, footer', () => {
+  const titles = new Map([['DEF-001', '自己呼び出し']]);
+  const body = inlineBody(finding({ rule_id: 'DEF-001', severity: 'high' }), titles);
+  const lines = body.split('\n');
+  assert.equal(lines[0], '<!-- ai-review:rule=DEF-001 -->');
+  assert.equal(lines[1], '**重要度**：🔴 high　**ルール**：`DEF-001` 自己呼び出し');
+  assert.ok(lines.indexOf('#### 指摘') < lines.indexOf('issue'));
+  assert.ok(lines.indexOf('#### 修正案') < lines.indexOf('suggestion'));
   assert.ok(body.endsWith('🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要'));
+});
+
+test('inlineBody: without a title the rule ID alone is shown', () => {
+  const body = inlineBody(finding({ rule_id: 'DEF-009', severity: 'medium' }));
+  assert.match(body, /\*\*重要度\*\*：🟡 medium　\*\*ルール\*\*：`DEF-009`\n/);
 });
 
 test('summaryBody: marker with rules SHA and the counts line', () => {
@@ -132,7 +151,7 @@ test('parseOutput: rejects empty, non-JSON and malformed findings', () => {
 });
 
 function mocks(files) {
-  const calls = { createReview: [], failed: null };
+  const calls = { createReview: [], failed: null, warnings: [] };
   const summary = {
     addHeading() {
       return summary;
@@ -162,6 +181,7 @@ function mocks(files) {
     },
     core: {
       setFailed: (m) => (calls.failed = m),
+      warning: (m) => calls.warnings.push(m),
       summary,
     },
   };
