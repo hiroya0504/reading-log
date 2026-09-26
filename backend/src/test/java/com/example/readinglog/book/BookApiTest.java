@@ -8,10 +8,13 @@ import com.example.readinglog.book.dto.BookListResponse;
 import com.example.readinglog.book.dto.BookResponse;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -431,6 +434,18 @@ class BookApiTest {
                         "新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE)),
                 BookResponse.class);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    // The response comes from the UPDATE's RETURNING clause, a different column list from the GET
+    // below, so each has to be asserted on its own.
+    assertThat(response.getBody())
+        .extracting(
+            BookResponse::id,
+            BookResponse::title,
+            BookResponse::author,
+            BookResponse::isbn,
+            BookResponse::totalPages,
+            BookResponse::status)
+        .containsExactly(
+            created.id(), "新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE);
 
     BookResponse read =
         asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
@@ -495,6 +510,33 @@ class BookApiTest {
 
     assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
     assertThat(response.getBody().path("errors").get(0).path("field").asText()).isEqualTo("title");
+  }
+
+  static Stream<Arguments> invalidUpdates() {
+    return Stream.of(
+        Arguments.of(new BookUpdateRequest("t", null, null, 0, BookStatus.READING), "totalPages"),
+        Arguments.of(
+            new BookUpdateRequest("a".repeat(256), null, null, null, BookStatus.READING), "title"),
+        Arguments.of(
+            new BookUpdateRequest("t", "a".repeat(256), null, null, BookStatus.READING), "author"),
+        Arguments.of(
+            new BookUpdateRequest("t", null, "1".repeat(21), null, BookStatus.READING), "isbn"));
+  }
+
+  /**
+   * {@code BookUpdateRequest} declares its constraints separately from {@code BookCreateRequest}.
+   * Without them each of these still fails — on a database CHECK or column width — but as a 500
+   * from the catch-all instead of a 400 naming the field.
+   */
+  @ParameterizedTest
+  @MethodSource("invalidUpdates")
+  void updateWithInvalidFieldsIsRejected(BookUpdateRequest request, String field) {
+    BookResponse created = create(asDev(), "t");
+
+    ResponseEntity<JsonNode> response = put(asDev(), created.id(), request);
+
+    assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
+    assertThat(response.getBody().path("errors").get(0).path("field").asText()).isEqualTo(field);
   }
 
   @Test
