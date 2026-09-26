@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Book } from "@/lib/api/books";
 import { ProgressBar, progressPercent } from "./ProgressBar";
 import { BookCover } from "./ui/BookCover";
+import { authorLabel } from "./ui/book-info";
 import { card, sectionHeading } from "./ui/styles";
 
 /** The books being read, up front, since recording a page is what the app is opened for most. */
@@ -26,7 +27,7 @@ export function ReadingNow({ books }: { books: Book[] }) {
               <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="font-serif text-lg leading-snug font-bold">{book.title}</span>
-                  <span className="text-[13px] text-muted">{book.author ?? "著者不明"}</span>
+                  <span className="text-[13px] text-muted">{authorLabel(book.author)}</span>
                 </div>
                 <Progress book={book} />
               </div>

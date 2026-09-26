@@ -59,6 +59,8 @@ describe("Bookshelf", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("本の一覧を取得できませんでした。");
     expect(screen.queryByText(/まだ本がありません/)).not.toBeInTheDocument();
+    // Filter links with zero counts would repeat the "empty shelf" story the alert contradicts.
+    expect(screen.queryByRole("navigation", { name: "状態で絞り込む" })).not.toBeInTheDocument();
   });
 
   it("shows one cover per book, in the order given, each linking to its page by title", () => {

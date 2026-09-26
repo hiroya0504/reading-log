@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteBookAction, updateProgressAction, updateStatusAction } from "../../actions";
 import { BookCover } from "../../ui/BookCover";
+import { authorLabel, bookInfoRows } from "../../ui/book-info";
 import { buttonSecondary, sectionHeading } from "../../ui/styles";
 import { DeleteBookButton } from "./DeleteBookButton";
 import { parseBookId } from "./book-id";
@@ -50,7 +51,7 @@ function BookDetail({ id, book }: { id: number; book: Book }) {
         <BookCover book={book} size="md" />
         <div className="flex flex-col gap-2.5">
           <h1 className="font-serif text-[34px] leading-snug font-bold">{book.title}</h1>
-          <p className="text-[15px] text-muted">{book.author ?? "著者不明"}</p>
+          <p className="text-[15px] text-muted">{authorLabel(book.author)}</p>
           <div className="mt-2">
             <StatusSwitcher action={updateStatusAction.bind(null, id)} current={book.status} />
           </div>
@@ -69,25 +70,16 @@ function BookDetail({ id, book }: { id: number; book: Book }) {
           </Link>
         </div>
         <dl className="grid border-t border-line-soft sm:grid-cols-2">
-          <InfoRow term="著者" value={book.author} />
-          <InfoRow
-            term="総ページ数"
-            value={book.totalPages === null ? null : `${book.totalPages} ページ`}
-          />
-          <InfoRow term="ISBN" value={book.isbn} />
+          {bookInfoRows(book).map((row) => (
+            <div key={row.term} className="flex gap-4 border-b border-line-soft px-1 py-3.5">
+              <dt className="w-24 shrink-0 text-[13px] text-muted">{row.term}</dt>
+              <dd className="text-sm">{row.value}</dd>
+            </div>
+          ))}
         </dl>
       </section>
 
       <DeleteBookButton action={deleteBookAction.bind(null, id)} />
     </>
-  );
-}
-
-function InfoRow({ term, value }: { term: string; value: string | null }) {
-  return (
-    <div className="flex gap-4 border-b border-line-soft px-1 py-3.5">
-      <dt className="w-24 shrink-0 text-[13px] text-muted">{term}</dt>
-      <dd className="text-sm">{value ?? "—"}</dd>
-    </div>
   );
 }

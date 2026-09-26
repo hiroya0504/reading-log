@@ -24,12 +24,14 @@ describe("ProgressForm", () => {
     expect(screen.getByLabelText("今読んでいるページ")).toHaveValue(120);
     expect(screen.getByText("/ 300 ページ")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.getByText("40%")).toBeInTheDocument();
   });
 
   it("explains the missing bar when there is no total", () => {
     render(<ProgressForm action={vi.fn()} book={book({ totalPages: null })} />);
 
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
     expect(screen.getByText(/総ページ数を登録すると/)).toBeInTheDocument();
   });
 
