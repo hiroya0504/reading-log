@@ -1,6 +1,7 @@
 package com.example.readinglog.book;
 
 import com.example.readinglog.book.dto.BookCreateRequest;
+import com.example.readinglog.book.dto.BookProgressUpdateRequest;
 import com.example.readinglog.book.dto.BookUpdateRequest;
 import com.example.readinglog.common.error.NotFoundException;
 import com.example.readinglog.common.error.ValidationException;
@@ -72,20 +73,45 @@ public class BookService {
     return book;
   }
 
-  /** Not-found semantics as in {@link #get}. */
+  /**
+   * Not-found semantics as in {@link #get}. Shrinking {@code totalPages} below the recorded page is
+   * rejected rather than clamping the page: silently moving the reader's place is worse than asking
+   * them to fix one of the two numbers.
+   */
   @Transactional
   public Book update(long id, BookUpdateRequest request) {
+    long userId = currentUser.requireUserId().value();
     Book book =
         bookMapper.update(
             id,
-            currentUser.requireUserId().value(),
+            userId,
             request.title(),
             request.author(),
             request.isbn(),
             request.totalPages(),
             request.status());
     if (book == null) {
-      throw notFound(id);
+      Book existing = requireOwned(id, userId);
+      throw new ValidationException(
+          "totalPages must not be less than currentPage (" + existing.currentPage() + ")");
+    }
+    return book;
+  }
+
+  /**
+   * Only the page is recorded; {@code status} is not moved along with it. Whether reaching the last
+   * page means "done" is the reader's call, and the edit form already lets them say so.
+   *
+   * <p>Not-found semantics as in {@link #get}.
+   */
+  @Transactional
+  public Book updateProgress(long id, BookProgressUpdateRequest request) {
+    long userId = currentUser.requireUserId().value();
+    Book book = bookMapper.updateProgress(id, userId, request.currentPage());
+    if (book == null) {
+      Book existing = requireOwned(id, userId);
+      throw new ValidationException(
+          "currentPage must not exceed totalPages (" + existing.totalPages() + ")");
     }
     return book;
   }
@@ -99,6 +125,18 @@ public class BookService {
     if (bookMapper.delete(id, currentUser.requireUserId().value()) == 0) {
       throw notFound(id);
     }
+  }
+
+  /**
+   * Tells a guarded write that matched nothing apart: a missing (or another user's) book is a 404;
+   * anything else means the guard rejected the value.
+   */
+  private Book requireOwned(long id, long userId) {
+    Book book = bookMapper.findByIdAndUserId(id, userId);
+    if (book == null) {
+      throw notFound(id);
+    }
+    return book;
   }
 
   private static NotFoundException notFound(long id) {

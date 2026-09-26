@@ -60,6 +60,20 @@
         ],
         "type" : "object"
       },
+      "BookProgressUpdateRequest" : {
+        "properties" : {
+          "currentPage" : {
+            "description" : "今読んでいるページ。0 以上で、総ページ数があればそれ以下。必須。",
+            "example" : 120,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "currentPage"
+        ],
+        "type" : "object"
+      },
       "BookResponse" : {
         "properties" : {
           "author" : {
@@ -372,6 +386,48 @@
           }
         },
         "summary" : "Replace the editable fields of one of the authenticated user's books.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
+    "/api/books/{id}/progress" : {
+      "put" : {
+        "operationId" : "updateBookProgress",
+        "parameters" : [
+          {
+            "in" : "path",
+            "name" : "id",
+            "required" : true,
+            "schema" : {
+              "format" : "int64",
+              "type" : "integer"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BookProgressUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the page the authenticated user has read up to in one of their books.",
         "tags" : [
           "book"
         ]

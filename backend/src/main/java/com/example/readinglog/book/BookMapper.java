@@ -75,8 +75,13 @@ public interface BookMapper {
    * no row matched. Declared as {@code @Select} with {@code flushCache} for the reasons {@link
    * #insert} documents.
    *
-   * <p>{@code current_page} / {@code rating} / {@code note} are left alone: they belong to later
-   * milestones and have their own write paths there.
+   * <p>{@code current_page} / {@code rating} / {@code note} are left alone: they have their own
+   * write paths ({@link #updateProgress} for the page).
+   *
+   * <p>A {@code totalPages} below the stored {@code current_page} matches no row, so the caller
+   * sees {@code null} and has to tell that apart from a missing book. The guard sits in the {@code
+   * WHERE} clause rather than in a read-then-write so the check and the write see the same row. The
+   * casts are needed because PostgreSQL cannot infer a type for a bare {@code NULL} parameter.
    */
   @Select(
       """
@@ -84,6 +89,8 @@ public interface BookMapper {
          SET title = #{title}, author = #{author}, isbn = #{isbn},
              total_pages = #{totalPages}, status = #{status}, updated_at = now()
        WHERE id = #{id} AND user_id = #{userId}
+         AND (CAST(#{totalPages} AS INTEGER) IS NULL
+              OR current_page <= CAST(#{totalPages} AS INTEGER))
       RETURNING id, user_id, title, author, isbn, total_pages, current_page,
                 status, rating, note, created_at, updated_at
       """)
@@ -96,6 +103,24 @@ public interface BookMapper {
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
       @Param("status") BookStatus status);
+
+  /**
+   * Records the page the reader is on, returning the updated row — {@code null} when no row
+   * matched, which is either a missing book or a {@code currentPage} beyond {@code total_pages}.
+   * The bound is in the {@code WHERE} clause for the reason {@link #update} gives.
+   */
+  @Select(
+      """
+      UPDATE books
+         SET current_page = #{currentPage}, updated_at = now()
+       WHERE id = #{id} AND user_id = #{userId}
+         AND (total_pages IS NULL OR #{currentPage} <= total_pages)
+      RETURNING id, user_id, title, author, isbn, total_pages, current_page,
+                status, rating, note, created_at, updated_at
+      """)
+  @Options(flushCache = Options.FlushCachePolicy.TRUE)
+  Book updateProgress(
+      @Param("id") long id, @Param("userId") long userId, @Param("currentPage") int currentPage);
 
   /**
    * @return the number of rows deleted — 0 when the book is missing or not the caller's
