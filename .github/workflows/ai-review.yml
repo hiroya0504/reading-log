@@ -133,13 +133,15 @@ jobs:
           # --allowedTools は「確認なしで使ってよい」ツールを足すだけで、使えるツールを絞らない。
           # SendMessage / ListAgents は確認の要らないツールなので、使わせないなら --disallowedTools で消す
           # （司令塔が形式の崩れた検証役に聞き直し、返事を待たずに KEEP として扱った事例がある）。
+          # ScheduleWakeup などの待機系も消す。サブエージェントをバックグラウンドで起動して待機しようとし、
+          # 完了前にセッションが終わって検出結果を失った事例がある。
           #
           # モデルは固定する。既定のモデルはアクションの版やプランで変わり、ルール別の効果測定の前後比較が崩れる。
           # 検出役と検証役のモデルは .claude/agents/*.md の frontmatter で固定している。
           claude_args: |
             --model claude-sonnet-5
             --max-turns 60
-            --disallowedTools "SendMessage,ListAgents"
+            --disallowedTools "SendMessage,ListAgents,ScheduleWakeup,CronCreate,Monitor"
             --allowedTools "Read,Glob,Grep,Agent,Task,Bash(git diff:*),Bash(git show:*),Bash(gh pr diff:*)"
             --json-schema '${{ steps.schema.outputs.json }}'
 
