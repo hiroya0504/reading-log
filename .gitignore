@@ -36,3 +36,6 @@ frontend/tsconfig.tsbuildinfo
 # so `git status` stays clean — the reviewers inspect the working tree and a dirty status would
 # mislead them. They persist locally, which is what the tuning loop reads.
 .review/
+
+# Python bytecode (scripts/review_metrics.py)
+__pycache__/

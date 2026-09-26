@@ -1,0 +1,217 @@
+name: ai-review
+
+# LLM による 2 段構成（検出→検証）のコードレビュー。仕組みと運用は docs/ai-review.md。
+#
+#   static-checks ──▶ ai-review（Claude。読み取り専用）──▶ post-review（投稿。決定的なスクリプト）
+#                                                               └─▶ remove-label（ラベルでの再実行時のみ）
+#
+# Claude が動くジョブには PR への書き込み権限を渡さない。投稿は別ジョブの post-review.js が行う。
+
+on:
+  pull_request:
+    # synchronize（push ごと）では走らせない。再実行したいときは `ai-review` ラベルを付ける。
+    types: [opened, ready_for_review, labeled]
+
+# 同じ PR の古い実行はキャンセルする。ただし `ai-review` 以外のラベルが付いた labeled イベントは
+# 独立したグループにして、実行中のレビューを巻き添えでキャンセルしないようにする
+# （concurrency はジョブの if より先に評価される）。
+concurrency:
+  group: >-
+    ai-review-${{ github.event.pull_request.number }}-${{
+    (github.event.action == 'labeled' && github.event.label.name != 'ai-review')
+    && github.run_id || 'review' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    # ドラフトは対象外。labeled は `ai-review` ラベルのときだけ。
+    if: >-
+      !github.event.pull_request.draft &&
+      (github.event.action != 'labeled' || github.event.label.name == 'ai-review')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 決定的に判定できるもの（フォーマット、テストの成否）は AI に回す前にここで落とす。
+      # ArchUnit は MVP 期間中は導入しない（CLAUDE.md）ので、レイヤ依存はここでも AI でも見ない。
+      - name: Spotless
+        run: make lint-backend
+
+      - name: Test
+        run: make test-backend
+
+  ai-review:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      structured_output: ${{ steps.review.outputs.structured_output }}
+      rules_sha: ${{ steps.base-defs.outputs.rules_sha }}
+    steps:
+      # マージコミットではなく PR の head を見る。post-review.js がコメント可能な行を求める
+      # pulls.listFiles の patch は head 側の行番号なので、それと揃える。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      # PR の中でルールや検証役の指示を書き換えても、その PR 自身のレビューには効かないように、
+      # レビューの定義はベースブランチの内容で上書きする。ベースにまだ無いもの（導入 PR 自体など）は
+      # PR ブランチの内容をそのまま使う。
+      - name: Use review definitions from the base branch
+        id: base-defs
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          base="origin/${BASE_REF}"
+          for path in .claude .github/ai-review-schema.json; do
+            if git cat-file -e "${base}:${path}" 2>/dev/null; then
+              rm -rf "${path}"
+              git checkout "${base}" -- "${path}"
+              echo "base: ${path}"
+            else
+              echo "PR branch (not on ${base}): ${path}"
+            fi
+          done
+          # レビューの定義（ルール、共通の前提、エージェント、手順）が最後に変わったコミット。
+          # ルールだけでなくエージェント定義の変更も結果を変えるので、.claude/ 全体で見る。
+          sha=$(git log -1 --format=%H "${base}" -- .claude)
+          if [ -z "${sha}" ]; then
+            sha=$(git log -1 --format=%H HEAD -- .claude)
+          fi
+          echo "rules_sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Load output schema
+        id: schema
+        run: echo "json=$(jq -c . .github/ai-review-schema.json)" >> "$GITHUB_OUTPUT"
+
+      - uses: anthropics/claude-code-action@v1
+        id: review
+        env:
+          # detector が `gh pr diff` を使う。このジョブのトークンは読み取り専用。
+          GH_TOKEN: ${{ github.token }}
+        with:
+          # Claude GitHub App のインストーラー（/install-github-app）が登録する OAuth トークン
+          # （Pro / Max のサブスクリプション）。API キーの従量課金にする場合は、この行を
+          #   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # に差し替える。
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Amazon Bedrock / Google Vertex AI 経由にする場合は、上のトークンの代わりに
+          #   use_bedrock: "true"   （または use_vertex: "true"）
+          # を指定し、aws-actions/configure-aws-credentials（または google-github-actions/auth）の
+          # ステップをこの前に置く。どちらも OIDC を使うので、ジョブの permissions に
+          # `id-token: write` を足す。--model もプロバイダのモデル ID に合わせる。
+          # 詳細は anthropics/claude-code-action の docs/cloud-providers.md。
+          github_token: ${{ github.token }}
+          prompt: |
+            MODE: ci
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE REF: ${{ github.event.pull_request.base.ref }}
+
+            .claude/skills/ai-review/SKILL.md の手順に従って、このPRをレビューしてください。
+            PRのブランチはカレントディレクトリにチェックアウト済みです。
+            PRにはコメントを投稿せず、結果を最終出力として返してください。
+          # Claude には読み取り系のツールとサブエージェント起動だけを許可する（投稿権限は渡さない）。
+          # サブエージェント起動ツールは Claude Code 2.1.63 で Task から Agent に改名された。
+          # Task は互換のエイリアスとして併記している。
+          #
+          # --allowedTools は「確認なしで使ってよい」ツールを足すだけで、使えるツールを絞らない。
+          # SendMessage / ListAgents は確認の要らないツールなので、使わせないなら --disallowedTools で消す
+          # （司令塔が形式の崩れた検証役に聞き直し、返事を待たずに KEEP として扱った事例がある）。
+          # ScheduleWakeup などの待機系も消す。サブエージェントをバックグラウンドで起動して待機しようとし、
+          # 完了前にセッションが終わって検出結果を失った事例がある。
+          #
+          # モデルは固定する。既定のモデルはアクションの版やプランで変わり、ルール別の効果測定の前後比較が崩れる。
+          # 検出役と検証役のモデルは .claude/agents/*.md の frontmatter で固定している。
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 60
+            --disallowedTools "SendMessage,ListAgents,ScheduleWakeup,CronCreate,Monitor"
+            --allowedTools "Read,Glob,Grep,Agent,Task,Bash(git diff:*),Bash(git show:*),Bash(gh pr diff:*)"
+            --json-schema '${{ steps.schema.outputs.json }}'
+
+      # 実行記録（ツール呼び出し、許可の拒否、最終出力）。失敗の調査と、ルールの調整に使う。
+      # アクションのログには拒否の詳細が出ないので、ここで残す。
+      - name: Upload Claude execution log
+        if: always() && steps.review.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review-execution-${{ github.run_attempt }}
+          path: ${{ steps.review.outputs.execution_file }}
+          retention-days: 14
+
+  post-review:
+    needs: ai-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      # 投稿スクリプトと、コメントに載せるルール名の出どころもベースブランチの内容を使う
+      # （理由は ai-review ジョブと同じ）。
+      - name: Use post-review.js and rules.md from the base branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          for path in .github/scripts/post-review.js .claude/skills/ai-review/references/rules.md; do
+            if git cat-file -e "origin/${BASE_REF}:${path}" 2>/dev/null; then
+              git checkout "origin/${BASE_REF}" -- "${path}"
+            else
+              echo "PR branch (not on origin/${BASE_REF}): ${path}"
+            fi
+          done
+
+      - uses: actions/github-script@v7
+        env:
+          STRUCTURED_OUTPUT: ${{ needs.ai-review.outputs.structured_output }}
+          RULES_SHA: ${{ needs.ai-review.outputs.rules_sha }}
+        with:
+          script: |
+            const { run } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/post-review.js`);
+            await run({
+              github,
+              context,
+              core,
+              structuredOutput: process.env.STRUCTURED_OUTPUT,
+              rulesSha: process.env.RULES_SHA,
+            });
+
+  # `ai-review` ラベルでの再実行は、結果に関わらずラベルを外して次の再実行に備える。
+  remove-label:
+    needs: [static-checks, ai-review, post-review]
+    if: >-
+      always() &&
+      github.event.action == 'labeled' && github.event.label.name == 'ai-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove ai-review label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --remove-label ai-review
