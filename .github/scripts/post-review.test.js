@@ -97,14 +97,16 @@ test('partition: high before medium, then file and line; cap at MAX_INLINE', () 
   );
 });
 
-test('parseRuleTitles: reads "## <RULE_ID> <title>" headings only', () => {
+test('parseRuleTitles: reads "## <RULE_ID> <title>" headings and labels perspectives', () => {
   const titles = parseRuleTitles(
     ['# AIレビュー ルール定義', '## 共通ルール', '## DEF-001 自己呼び出し', '### 指摘すること', '## SEC-001 MyBatis の `${}`'].join('\n'),
   );
-  assert.deepEqual([...titles], [
-    ['DEF-001', '自己呼び出し'],
-    ['SEC-001', 'MyBatis の `${}`'],
-  ]);
+  assert.equal(titles.get('DEF-001'), '自己呼び出し');
+  assert.equal(titles.get('SEC-001'), 'MyBatis の `${}`');
+  assert.equal(titles.has('共通ルール'), false);
+  // Perspective IDs are always labelled, even though rules.md does not define them.
+  assert.equal(titles.get('SECURITY'), 'セキュリティ（ルール外の観点）');
+  assert.equal(titles.get('TESTS'), 'テスト（ルール外の観点）');
 });
 
 test('inlineBody: marker first, then severity and rule, issue and suggestion sections, footer', () => {
@@ -234,4 +236,11 @@ test('run: failed groups still post the review, then fail the step', async () =>
   assert.equal(m.calls.createReview.length, 1);
   assert.match(m.calls.createReview[0].body, /2 件/);
   assert.match(m.calls.failed, /2 件/);
+});
+
+test('inlineBody: perspective findings show the perspective label', () => {
+  const titles = parseRuleTitles('');
+  const body = inlineBody(finding({ rule_id: 'SECURITY', severity: 'high' }), titles);
+  assert.equal(body.split('\n')[0], '<!-- ai-review:rule=SECURITY -->');
+  assert.match(body, /\*\*ルール\*\*：`SECURITY` セキュリティ（ルール外の観点）/);
 });

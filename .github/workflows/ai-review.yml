@@ -89,10 +89,11 @@ jobs:
               echo "PR branch (not on ${base}): ${path}"
             fi
           done
-          rules=.claude/skills/ai-review/references/rules.md
-          sha=$(git log -1 --format=%H "${base}" -- "${rules}")
+          # レビューの定義（ルール、共通の前提、エージェント、手順）が最後に変わったコミット。
+          # ルールだけでなくエージェント定義の変更も結果を変えるので、.claude/ 全体で見る。
+          sha=$(git log -1 --format=%H "${base}" -- .claude)
           if [ -z "${sha}" ]; then
-            sha=$(git log -1 --format=%H HEAD -- "${rules}")
+            sha=$(git log -1 --format=%H HEAD -- .claude)
           fi
           echo "rules_sha=${sha}" >> "$GITHUB_OUTPUT"
 
@@ -122,6 +123,7 @@ jobs:
             MODE: ci
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE REF: ${{ github.event.pull_request.base.ref }}
 
             .claude/skills/ai-review/SKILL.md の手順に従って、このPRをレビューしてください。
             PRのブランチはカレントディレクトリにチェックアウト済みです。

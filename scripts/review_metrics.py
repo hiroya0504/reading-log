@@ -2,7 +2,7 @@
 """AIレビューの指摘を、ルール別に集計する。
 
 期間内に更新された PR のレビュースレッドを `gh api graphql` で取得する。先頭コメントに
-`<!-- ai-review:rule=<RULE_ID> -->` のマーカーがあるスレッドだけを対象に、ルールごとに
+`<!-- ai-review:rule=<ID> -->` のマーカーがあるスレッドだけを対象に、ルール（またはルール外の観点）ごとに
 件数・outdated 率・resolved 率・👍/👎/😕 の数を出す。
 
 使い方:
@@ -24,7 +24,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-MARKER = re.compile(r"<!--\s*ai-review:rule=([A-Z]+-\d+)\s*-->")
+# Rule IDs (DEF-001) for the rules perspective, perspective IDs (SECURITY, TESTS) for the others.
+MARKER = re.compile(r"<!--\s*ai-review:rule=([A-Z]+(?:-\d+)?)\s*-->")
 
 QUERY = """
 query($q: String!, $cursor: String) {
@@ -126,12 +127,15 @@ def hints(s: RuleStats) -> list[str]:
     up, down, confused = (s.reactions[k] for k in ("THUMBS_UP", "THUMBS_DOWN", "CONFUSED"))
     out = []
     if down > up and down > 0:
-        out.append("👎 が多い → 検証役の除外条件（rules.md の「指摘しないこと」）を見直す")
+        out.append(
+            "👎 が多い → 誤指摘を通している。ルールなら rules.md の「指摘しないこと」、"
+            "ルール外の観点なら検出役・検証役の定義を見直す"
+        )
     if confused > up and confused > 0:
-        out.append("😕 が多い → ルールの削除を検討する")
+        out.append("😕 が多い → ルール（または観点）の削除を検討する")
     outdated_rate = s.outdated / s.count if s.count else 0
     if outdated_rate < 0.2:
-        out.append("outdated 率が低い → 指摘が直されていない。ルールの削除を検討する")
+        out.append("outdated 率が低い → 指摘が直されていない。ルール（または観点）の削除を検討する")
     elif outdated_rate > 0.8:
         out.append("outdated 率が高い → 機械的に直せている。静的解析への移行を検討する")
     return out

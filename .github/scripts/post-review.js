@@ -13,6 +13,11 @@ const MAX_INLINE = 5;
 const SEVERITY_ORDER = { high: 0, medium: 1 };
 const SEVERITY_LABEL = { high: '🔴 high', medium: '🟡 medium' };
 const RULES_PATH = '.claude/skills/ai-review/references/rules.md';
+// Perspectives without rules.md entries: their findings carry the perspective ID instead.
+const PERSPECTIVE_TITLES = new Map([
+  ['SECURITY', 'セキュリティ（ルール外の観点）'],
+  ['TESTS', 'テスト（ルール外の観点）'],
+]);
 const FOOTER = '🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要';
 
 /**
@@ -84,7 +89,7 @@ function partition(findings, commentableByFile, max = MAX_INLINE) {
  * DEF-001 means. A missing or unreadable file only costs the titles, never the review.
  */
 function parseRuleTitles(markdown) {
-  const titles = new Map();
+  const titles = new Map(PERSPECTIVE_TITLES);
   for (const m of (markdown || '').matchAll(/^## ([A-Z]+-\d+)\s+(.+)$/gm)) {
     titles.set(m[1], m[2].trim());
   }
@@ -225,7 +230,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
   const commentableByFile = new Map(files.map((f) => [f.filename, parsePatch(f.patch)]));
 
   const parts = partition(data.findings, commentableByFile);
-  let titles = new Map();
+  let titles = new Map(PERSPECTIVE_TITLES);
   try {
     titles = parseRuleTitles(fs.readFileSync(RULES_PATH, 'utf8'));
   } catch (e) {

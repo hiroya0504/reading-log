@@ -1,6 +1,7 @@
 # AI レビュー
 
 Claude Code による 2 段構成（検出→検証）のコードレビュー。ローカル（Skill）と GitHub Actions で、同じ `.claude/` の定義を共有する。
+検出役は観点ごとに分かれている（規約準拠・セキュリティ・テスト）。検証役は全観点で共通。
 
 ## 設計方針
 
@@ -9,16 +10,32 @@ Claude Code による 2 段構成（検出→検証）のコードレビュー�
    - フォーマットは Spotless、テストの成否は `make test-backend` に任せる。
    - コメントの書式、件数の上限、投稿は `post-review.js` が行う。
    - レイヤ依存は ArchUnit に任せたいが、MVP 期間中は導入しない（`CLAUDE.md`）。当面は人間が見る。
-3. **ルール単位で効果を測って改善する。** 指摘にルール ID を埋め込み、ルールごとに「取り込まれたか」を集計する。
+3. **ルール単位で効果を測って改善する。** 指摘にルール ID（ルール外の観点は観点 ID）を埋め込み、ID ごとに「取り込まれたか」を集計する。
+
+## 観点
+
+| 観点 | 検出役 | 判定の基準 | 対象 | 指摘の ID |
+| --- | --- | --- | --- | --- |
+| 規約準拠 | `review-detector-rules` | `rules.md` のルールだけ | 本体の `.java` | `DEF-001` などのルール ID |
+| セキュリティ | `review-detector-security` | 基準文書なし。エージェント定義の観点の説明 | 本体の `.java` | `SECURITY` |
+| テスト | `review-detector-tests` | 基準文書なし。エージェント定義の観点の説明 | 本体とテストの `.java` | `TESTS` |
+
+- `rules.md` に基づいてレビューするのは規約準拠の検出役だけ。セキュリティとテストは、ルールに書いていない問題も拾う。
+- 全観点に共通の「対象外」と原則（「かもしれない」だけの指摘は出さない、など）は `common.md` にある。
+- **ルール外の観点は、規約準拠より誤指摘が出やすい。** 検証役が照合できる基準文書が無く、コードで事実と経路を確かめるだけになるため。`review_metrics.py` の 👎 を見て、多ければ基準文書を作るか、よく出る指摘をルールに昇格させる。
+- 同じファイルの同じ行に複数の観点の指摘があれば、規約準拠 → セキュリティ → テストの順で 1 件だけ残す。
 
 ## 構成
 
 ```
 .claude/
-├── agents/review-detector.md          検出役。差分からルール違反の候補を出す
-├── agents/review-verifier.md          検証役。1 件ずつ KEEP / DROP を判定する（迷ったら DROP）
+├── agents/review-detector-rules.md    検出役（規約準拠）
+├── agents/review-detector-security.md 検出役（セキュリティ）
+├── agents/review-detector-tests.md    検出役（テスト）
+├── agents/review-verifier.md          検証役。全観点共通。1 件ずつ KEEP / DROP を判定する（迷ったら DROP）
 ├── skills/ai-review/SKILL.md          司令塔の手順。自分ではレビューしない
-├── skills/ai-review/references/rules.md   ルール定義
+├── skills/ai-review/references/common.md  全観点に共通の「対象外」と原則
+├── skills/ai-review/references/rules.md   規約準拠のルール定義
 └── settings.json                      ローカルで git diff / git show / gh pr diff を許可
 .github/
 ├── workflows/ai-review.yml
@@ -32,12 +49,12 @@ static-checks ─▶ ai-review ─▶ post-review ─▶ remove-label
  Spotless          Claude       post-review.js   ai-review ラベルでの
  + テスト          読み取り専用   投稿権限あり       再実行時だけ
                     │
-                    ├─ review-detector ×(8 ファイルごと)
+                    ├─ review-detector-{rules,security,tests} ×(観点 × 8 ファイルごと)
                     ├─ review-verifier ×(指摘ごと)
                     └─ 集約 → {detected_count, findings[]}
 ```
 
-- 対象は `backend/src/main/java/` 配下の `.java` だけ。テストコードとフロントエンドは対象外。
+- 対象は `backend/src/main/java/` 配下の `.java`（テストの観点だけ `backend/src/test/java/` も）。フロントエンドは対象外。
 - Claude が動くジョブには、PR への書き込み権限を渡さない（`pull-requests: read`）。投稿は別ジョブの `post-review.js` が行う。
 - モデルは固定している（下の「モデルの選定」）。既定のモデルは勝手に変わり、ルール別の効果測定の前後比較が崩れるため。変えるときは、変えた日付を記録して比較から外す。
 - 検出役が差分を取得できなかったなどで失敗したグループがあると、`failed_groups` が 1 以上になる。そのときは「指摘なし」とは書かず、不完全なレビューである旨をサマリに出したうえで、ジョブを失敗にする。
@@ -78,7 +95,7 @@ Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`
 | 役割 | モデル | 設定場所 |
 | --- | --- | --- |
 | 司令塔 | `claude-sonnet-5` | `ai-review.yml` の `--model` |
-| 検出役 | `claude-opus-5-5` | `.claude/agents/review-detector.md` の `model` |
+| 検出役（3 観点とも） | `claude-opus-5-5` | `.claude/agents/review-detector-*.md` の `model` |
 | 検証役 | `claude-opus-5-5` | `.claude/agents/review-verifier.md` の `model` |
 
 - 司令塔は呼び分けと集約をするだけなので Sonnet で足りる。
@@ -93,15 +110,17 @@ Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`
 | Opus | 3 | 7/7、7/7、7/7 | 0 | $0.90〜1.04 | 110〜240 秒 |
 
 Opus は単価が高いが、少ない手数で答えにたどり着くため、全体の費用はむしろ下がった。試行回数が少ないので傾向として扱う。
+この比較は観点を分ける前（検出役 1 体）のもの。観点を 3 つに分けたので、検出役の費用はおよそ 3 倍になる見込み。
 
 ## ルールの追加・変更
 
 `rules.md` を編集する。各ルールには、ID・重要度・「指摘すること」・「指摘しないこと」を必ず書く。誤検出の多くは「指摘しないこと」で防ぐ。
+ルール外の観点（`SECURITY` / `TESTS`）でよく出る指摘は、ルールに昇格させると、検証役が照合できるようになり精度が上がる。
 
 - 初期ルールは DEF-001（`@Transactional` の自己呼び出し）、DEF-002（例外の握りつぶし）、SEC-001（MyBatis の `${}`）の 3 つ。
 - PERF 次元は、MVP 期間中はルールを置かない。
 - ルールを変えた PR のレビューには、変更前のルールが使われる（上記の上書きのため）。
-- サマリの先頭に `<!-- ai-review:summary rules=<SHA> -->` が入るので、ルールの変更前後で効果を比べられる。
+- サマリの先頭に `<!-- ai-review:summary rules=<SHA> -->` が入る。SHA は `.claude/` が最後に変わったコミットで、ルールやエージェント定義の変更前後で効果を比べられる。
 
 ## 効果の測定
 
