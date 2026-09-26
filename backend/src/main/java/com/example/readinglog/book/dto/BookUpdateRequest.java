@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -34,4 +35,11 @@ public record BookUpdateRequest(
         Integer totalPages,
     @Schema(description = "読書状態。必須。", requiredMode = RequiredMode.REQUIRED)
         @NotNull(message = "status is required")
-        BookStatus status) {}
+        BookStatus status,
+    @Schema(
+            description = "表紙の画像の URL。本の検索（GET /api/book-search）の coverUrl をそのまま渡す。省略すると消える。",
+            example =
+                "https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1")
+        @Size(max = 500, message = "coverUrl must be at most 500 characters")
+        @Pattern(regexp = CoverUrls.PATTERN, message = "coverUrl must be a Google Books image URL")
+        String coverUrl) {}

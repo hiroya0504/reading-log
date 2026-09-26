@@ -78,6 +78,17 @@ gh api repos/<owner>/reading-log/rules/branches/main --jq '.[].type'
 
 **空配列が返ったら保護は効いていない。** ruleset が `active` でも `conditions.ref_name.include` が空だと対象ブランチがゼロ件になり、設定画面上は正しく見えるのに何も保護されない状態になる。ruleset の存在ではなく、このエンドポイントの出力で判断すること。
 
+## 外部 API（Google Books）
+
+本の検索（`GET /api/book-search`）は backend の `booksearch` パッケージから Google Books API を呼ぶ。frontend は Google を直接呼ばない（キーをブラウザに出さず、応答の形を OpenAPI の契約に載せるため）。
+
+- **API キーが実質必須。** キーなしのリクエストは全利用者で共有する枠に数えられ、ほぼ常に 1 日の上限に達している（429）。
+  Books API は無料で、課金アカウントも要らない（1 プロジェクトあたり 1 日およそ 1,000 リクエスト）。
+- キーは `backend/.env` に `GOOGLE_BOOKS_API_KEY=...` と書く。`.gitignore` で除外済みで、`application.yml` の `spring.config.import` が起動時に読む。ファイルが無ければキーなしで動く。
+- 上限超過（429）は `503 BOOK_SEARCH_QUOTA_EXCEEDED`、それ以外の失敗は `502 BOOK_SEARCH_UNAVAILABLE` として返す。
+- 表紙は画像の URL だけを `books.cover_url` に持つ（画像そのものは保存しない）。受け付けるのは `https://books.google.com/` と `https://books.googleusercontent.com/` だけ。
+- テストは Google に繋がない。`FakeGoogleBooks`（JDK の `HttpServer`）を立てて向ける。
+
 ## MVP のマイルストーン
 
 | M | 内容 |

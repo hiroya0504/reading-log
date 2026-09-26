@@ -21,7 +21,7 @@ public interface BookMapper {
       """
       <script>
       SELECT id, user_id, title, author, isbn, total_pages, current_page,
-             status, rating, note, created_at, updated_at
+             status, rating, note, created_at, updated_at, cover_url
         FROM books
        WHERE user_id = #{userId}
        <if test="status != null">AND status = #{status}</if>
@@ -71,10 +71,10 @@ public interface BookMapper {
    */
   @Select(
       """
-      INSERT INTO books (user_id, title, author, isbn, total_pages, status)
-      VALUES (#{userId}, #{title}, #{author}, #{isbn}, #{totalPages}, #{status})
+      INSERT INTO books (user_id, title, author, isbn, total_pages, status, cover_url)
+      VALUES (#{userId}, #{title}, #{author}, #{isbn}, #{totalPages}, #{status}, #{coverUrl})
       RETURNING id, user_id, title, author, isbn, total_pages, current_page,
-                status, rating, note, created_at, updated_at
+                status, rating, note, created_at, updated_at, cover_url
       """)
   @Options(flushCache = Options.FlushCachePolicy.TRUE)
   Book insert(
@@ -83,7 +83,8 @@ public interface BookMapper {
       @Param("author") String author,
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
-      @Param("status") BookStatus status);
+      @Param("status") BookStatus status,
+      @Param("coverUrl") String coverUrl);
 
   /**
    * Owner-scoped like {@link #findByUserId}: another user's id finds nothing, same as a missing
@@ -92,7 +93,7 @@ public interface BookMapper {
   @Select(
       """
       SELECT id, user_id, title, author, isbn, total_pages, current_page,
-             status, rating, note, created_at, updated_at
+             status, rating, note, created_at, updated_at, cover_url
         FROM books
        WHERE id = #{id} AND user_id = #{userId}
       """)
@@ -115,12 +116,13 @@ public interface BookMapper {
       """
       UPDATE books
          SET title = #{title}, author = #{author}, isbn = #{isbn},
-             total_pages = #{totalPages}, status = #{status}, updated_at = now()
+             total_pages = #{totalPages}, status = #{status}, cover_url = #{coverUrl},
+             updated_at = now()
        WHERE id = #{id} AND user_id = #{userId}
          AND (CAST(#{totalPages} AS INTEGER) IS NULL
               OR current_page <= CAST(#{totalPages} AS INTEGER))
       RETURNING id, user_id, title, author, isbn, total_pages, current_page,
-                status, rating, note, created_at, updated_at
+                status, rating, note, created_at, updated_at, cover_url
       """)
   @Options(flushCache = Options.FlushCachePolicy.TRUE)
   Book update(
@@ -130,7 +132,8 @@ public interface BookMapper {
       @Param("author") String author,
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
-      @Param("status") BookStatus status);
+      @Param("status") BookStatus status,
+      @Param("coverUrl") String coverUrl);
 
   /**
    * Records the page the reader is on, returning the updated row — {@code null} when no row
@@ -144,7 +147,7 @@ public interface BookMapper {
        WHERE id = #{id} AND user_id = #{userId}
          AND (total_pages IS NULL OR #{currentPage} <= total_pages)
       RETURNING id, user_id, title, author, isbn, total_pages, current_page,
-                status, rating, note, created_at, updated_at
+                status, rating, note, created_at, updated_at, cover_url
       """)
   @Options(flushCache = Options.FlushCachePolicy.TRUE)
   Book updateProgress(

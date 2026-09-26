@@ -28,7 +28,8 @@ public record BookResponse(
     @Schema(description = "5 段階評価。未設定なら null。", example = "4") Short rating,
     @Schema(description = "感想。未設定なら null。") String note,
     @Schema(description = "登録日時。", requiredMode = RequiredMode.REQUIRED) OffsetDateTime createdAt,
-    @Schema(description = "更新日時。", requiredMode = RequiredMode.REQUIRED) OffsetDateTime updatedAt) {
+    @Schema(description = "更新日時。", requiredMode = RequiredMode.REQUIRED) OffsetDateTime updatedAt,
+    @Schema(description = "表紙の画像の URL。未設定なら null。") String coverUrl) {
 
   public static BookResponse from(Book book) {
     return new BookResponse(
@@ -42,6 +43,7 @@ public record BookResponse(
         book.rating(),
         book.note(),
         book.createdAt(),
-        book.updatedAt());
+        book.updatedAt(),
+        book.coverUrl());
   }
 }

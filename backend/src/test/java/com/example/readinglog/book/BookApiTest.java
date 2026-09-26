@@ -48,6 +48,14 @@ class BookApiTest {
   private static final String OTHER_USERNAME = "other";
   private static final String OTHER_PASSWORD = "other-password";
   private static final long MISSING_ID = 999999;
+  private static final String COVER =
+      "https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1";
+
+  /** A cover URL on an allowed host, padded to exactly {@code length} characters. */
+  private static String coverOfLength(int length) {
+    String prefix = "https://books.googleusercontent.com/";
+    return prefix + "x".repeat(length - prefix.length());
+  }
 
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private JdbcTemplate jdbc;
@@ -81,7 +89,7 @@ class BookApiTest {
   }
 
   private BookResponse create(TestRestTemplate client, String title) {
-    return create(client, new BookCreateRequest(title, null, null, null, null));
+    return create(client, new BookCreateRequest(title, null, null, null, null, null));
   }
 
   private BookResponse create(TestRestTemplate client, BookCreateRequest request) {
@@ -93,11 +101,12 @@ class BookApiTest {
   }
 
   private BookResponse createWithStatus(TestRestTemplate client, String title, BookStatus status) {
-    return create(client, new BookCreateRequest(title, null, null, null, status));
+    return create(client, new BookCreateRequest(title, null, null, null, status, null));
   }
 
   private BookResponse createWithPages(int totalPages) {
-    return create(asDev(), new BookCreateRequest("t", null, null, totalPages, BookStatus.READING));
+    return create(
+        asDev(), new BookCreateRequest("t", null, null, totalPages, BookStatus.READING, null));
   }
 
   private BookResponse read(long id) {
@@ -156,20 +165,34 @@ class BookApiTest {
 
   static Stream<Arguments> invalidCreates() {
     return Stream.of(
-        Arguments.of(new BookCreateRequest("a".repeat(256), null, null, null, null), "title"),
-        Arguments.of(new BookCreateRequest("t", "a".repeat(256), null, null, null), "author"),
-        Arguments.of(new BookCreateRequest("t", null, "1".repeat(21), null, null), "isbn"));
+        Arguments.of(new BookCreateRequest("a".repeat(256), null, null, null, null, null), "title"),
+        Arguments.of(new BookCreateRequest("t", "a".repeat(256), null, null, null, null), "author"),
+        Arguments.of(new BookCreateRequest("t", null, "1".repeat(21), null, null, null), "isbn"));
+  }
+
+  /** Each is rejected by the pattern or the length, and would otherwise reach an {@code <img>}. */
+  static Stream<String> invalidCoverUrls() {
+    return Stream.of(
+        coverOfLength(501),
+        "http://books.google.com/books/content?id=abc",
+        "https://example.com/cover.png",
+        "https://books.google.com.evil.example/cover.png",
+        "javascript:alert(1)");
   }
 
   static Stream<Arguments> invalidUpdates() {
     return Stream.of(
-        Arguments.of(new BookUpdateRequest("t", null, null, 0, BookStatus.READING), "totalPages"),
         Arguments.of(
-            new BookUpdateRequest("a".repeat(256), null, null, null, BookStatus.READING), "title"),
+            new BookUpdateRequest("t", null, null, 0, BookStatus.READING, null), "totalPages"),
         Arguments.of(
-            new BookUpdateRequest("t", "a".repeat(256), null, null, BookStatus.READING), "author"),
+            new BookUpdateRequest("a".repeat(256), null, null, null, BookStatus.READING, null),
+            "title"),
         Arguments.of(
-            new BookUpdateRequest("t", null, "1".repeat(21), null, BookStatus.READING), "isbn"));
+            new BookUpdateRequest("t", "a".repeat(256), null, null, BookStatus.READING, null),
+            "author"),
+        Arguments.of(
+            new BookUpdateRequest("t", null, "1".repeat(21), null, BookStatus.READING, null),
+            "isbn"));
   }
 
   @Nested
@@ -395,7 +418,7 @@ class BookApiTest {
     void createRequiresAuthenticationAndStoresNothing() {
       ResponseEntity<String> response =
           restTemplate.postForEntity(
-              "/api/books", new BookCreateRequest("t", null, null, null, null), String.class);
+              "/api/books", new BookCreateRequest("t", null, null, null, null, null), String.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
       assertThat(jdbc.queryForObject("SELECT count(*) FROM books", Integer.class)).isZero();
@@ -438,7 +461,7 @@ class BookApiTest {
               .postForEntity(
                   "/api/books",
                   new BookCreateRequest(
-                      "リファクタリング", "Martin Fowler", "9784274224546", 480, BookStatus.READING),
+                      "リファクタリング", "Martin Fowler", "9784274224546", 480, BookStatus.READING, null),
                   BookResponse.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -471,7 +494,7 @@ class BookApiTest {
           asDev()
               .postForEntity(
                   "/api/books",
-                  new BookCreateRequest("状態の確認", null, null, null, status),
+                  new BookCreateRequest("状態の確認", null, null, null, status, null),
                   BookResponse.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -482,7 +505,7 @@ class BookApiTest {
     @Test
     void acceptsValuesAtTheirLimits() {
       BookCreateRequest request =
-          new BookCreateRequest("a".repeat(255), "b".repeat(255), "1".repeat(20), 1, null);
+          new BookCreateRequest("a".repeat(255), "b".repeat(255), "1".repeat(20), 1, null, null);
 
       BookResponse created = create(asDev(), request);
 
@@ -513,7 +536,7 @@ class BookApiTest {
           asDev()
               .postForEntity(
                   "/api/books",
-                  new BookCreateRequest("   ", null, null, null, null),
+                  new BookCreateRequest("   ", null, null, null, null, null),
                   JsonNode.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -530,7 +553,9 @@ class BookApiTest {
       ResponseEntity<JsonNode> response =
           asDev()
               .postForEntity(
-                  "/api/books", new BookCreateRequest("t", null, null, 0, null), JsonNode.class);
+                  "/api/books",
+                  new BookCreateRequest("t", null, null, 0, null, null),
+                  JsonNode.class);
 
       assertRejectedField(response, "totalPages");
       assertThat(response.getBody().path("errors").get(0).path("message").asText())
@@ -579,7 +604,7 @@ class BookApiTest {
           asDev()
               .postForEntity(
                   "/api/books",
-                  new BookCreateRequest("場所", null, null, null, null),
+                  new BookCreateRequest("場所", null, null, null, null, null),
                   BookResponse.class);
 
       assertThat(response.getHeaders().getLocation())
@@ -589,6 +614,97 @@ class BookApiTest {
               .getForEntity(response.getHeaders().getLocation().toString(), BookResponse.class)
               .getBody();
       assertThat(followed.title()).isEqualTo("場所");
+    }
+  }
+
+  @Nested
+  class CoverUrl {
+
+    @Test
+    void createStoresAndReturnsTheCover() {
+      BookResponse created =
+          create(asDev(), new BookCreateRequest("t", null, null, null, null, COVER));
+
+      assertThat(created.coverUrl()).isEqualTo(COVER);
+      assertThat(read(created.id()).coverUrl()).isEqualTo(COVER);
+    }
+
+    /** The accepted side of the length bound; 501 is in {@link #invalidCoverUrls}. */
+    @Test
+    void createAcceptsACoverAtTheMaximumLength() {
+      BookResponse created =
+          create(asDev(), new BookCreateRequest("t", null, null, null, null, coverOfLength(500)));
+
+      assertThat(read(created.id()).coverUrl()).hasSize(500);
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.example.readinglog.book.BookApiTest#invalidCoverUrls")
+    void createRejectsACoverThatIsNotAGoogleBooksImage(String coverUrl) {
+      ResponseEntity<JsonNode> response =
+          asDev()
+              .postForEntity(
+                  "/api/books",
+                  new BookCreateRequest("t", null, null, null, null, coverUrl),
+                  JsonNode.class);
+
+      assertRejectedField(response, "coverUrl");
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.example.readinglog.book.BookApiTest#invalidCoverUrls")
+    void updateRejectsACoverThatIsNotAGoogleBooksImage(String coverUrl) {
+      BookResponse created = create(asDev(), "t");
+
+      ResponseEntity<JsonNode> response =
+          put(
+              asDev(),
+              created.id(),
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, coverUrl));
+
+      assertRejectedField(response, "coverUrl");
+    }
+
+    @Test
+    void updateReplacesTheCover() {
+      BookResponse created = create(asDev(), "t");
+
+      ResponseEntity<JsonNode> response =
+          put(
+              asDev(),
+              created.id(),
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, COVER));
+
+      assertThat(response.getBody().path("coverUrl").asText()).isEqualTo(COVER);
+      assertThat(read(created.id()).coverUrl()).isEqualTo(COVER);
+    }
+
+    /** Full replacement, as for the other optional fields: an omitted cover is removed. */
+    @Test
+    void updateWithoutACoverClearsIt() {
+      BookResponse created =
+          create(asDev(), new BookCreateRequest("t", null, null, null, null, COVER));
+
+      ResponseEntity<JsonNode> response =
+          put(
+              asDev(),
+              created.id(),
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, null));
+
+      assertThat(response.getBody().path("coverUrl").isNull()).isTrue();
+      assertThat(read(created.id()).coverUrl()).isNull();
+    }
+
+    /** The progress endpoint writes the page only; a stray column would drop the cover. */
+    @Test
+    void progressKeepsTheCover() {
+      BookResponse created =
+          create(asDev(), new BookCreateRequest("t", null, null, 300, BookStatus.READING, COVER));
+
+      ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 10);
+
+      assertThat(response.getBody().path("coverUrl").asText()).isEqualTo(COVER);
+      assertThat(read(created.id()).coverUrl()).isEqualTo(COVER);
     }
   }
 
@@ -665,7 +781,7 @@ class BookApiTest {
                   HttpMethod.PUT,
                   new HttpEntity<>(
                       new BookUpdateRequest(
-                          "新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE)),
+                          "新題", "Martin Fowler", "9784274224546", 480, BookStatus.DONE, null)),
                   BookResponse.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -716,7 +832,7 @@ class BookApiTest {
                   "/api/books/" + created.id(),
                   HttpMethod.PUT,
                   new HttpEntity<>(
-                      new BookUpdateRequest("新題", null, null, 100, BookStatus.READING)),
+                      new BookUpdateRequest("新題", null, null, 100, BookStatus.READING, null)),
                   BookResponse.class);
 
       assertThat(response.getBody())
@@ -731,13 +847,13 @@ class BookApiTest {
     @Test
     void updateClearsOmittedOptionalFields() {
       BookResponse created =
-          create(asDev(), new BookCreateRequest("t", "著者", "isbn", 100, BookStatus.READING));
+          create(asDev(), new BookCreateRequest("t", "著者", "isbn", 100, BookStatus.READING, null));
 
       ResponseEntity<JsonNode> response =
           put(
               asDev(),
               created.id(),
-              new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, null));
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody().path("author").isNull()).isTrue();
@@ -758,7 +874,7 @@ class BookApiTest {
               asDev(),
               created.id(),
               new BookUpdateRequest(
-                  "a".repeat(255), "b".repeat(255), "1".repeat(20), 1, BookStatus.READING));
+                  "a".repeat(255), "b".repeat(255), "1".repeat(20), 1, BookStatus.READING, null));
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(read(created.id()))
@@ -779,7 +895,7 @@ class BookApiTest {
       BookResponse created = create(asDev(), "t");
 
       ResponseEntity<JsonNode> response =
-          put(asDev(), created.id(), new BookUpdateRequest("t", null, null, null, null));
+          put(asDev(), created.id(), new BookUpdateRequest("t", null, null, null, null, null));
 
       assertRejectedField(response, "status");
     }
@@ -792,7 +908,7 @@ class BookApiTest {
           put(
               asDev(),
               created.id(),
-              new BookUpdateRequest(" ", null, null, null, BookStatus.READING));
+              new BookUpdateRequest(" ", null, null, null, BookStatus.READING, null));
 
       assertRejectedField(response, "title");
     }
@@ -823,7 +939,10 @@ class BookApiTest {
       progress(asDev(), created.id(), 80);
 
       ResponseEntity<JsonNode> response =
-          put(asDev(), created.id(), new BookUpdateRequest("新題", null, null, 79, BookStatus.DONE));
+          put(
+              asDev(),
+              created.id(),
+              new BookUpdateRequest("新題", null, null, 79, BookStatus.DONE, null));
 
       assertProblemDetail(response, HttpStatus.BAD_REQUEST, "VALIDATION_ERROR");
       assertThat(read(created.id()))
@@ -841,7 +960,7 @@ class BookApiTest {
           put(
               asDev(),
               created.id(),
-              new BookUpdateRequest("t", null, null, 80, BookStatus.READING));
+              new BookUpdateRequest("t", null, null, 80, BookStatus.READING, null));
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody().path("totalPages").asInt()).isEqualTo(80);
@@ -858,7 +977,7 @@ class BookApiTest {
           put(
               asDev(),
               created.id(),
-              new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, null));
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
       assertThat(response.getBody().path("totalPages").isNull()).isTrue();
@@ -871,7 +990,7 @@ class BookApiTest {
           put(
               asDev(),
               MISSING_ID,
-              new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, null));
 
       assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
     }
@@ -885,7 +1004,7 @@ class BookApiTest {
           put(
               asOther(),
               devBook.id(),
-              new BookUpdateRequest("乗っ取り", null, null, null, BookStatus.DONE));
+              new BookUpdateRequest("乗っ取り", null, null, null, BookStatus.DONE, null));
 
       assertProblemDetail(response, HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND");
       assertThat(read(devBook.id()))
@@ -901,7 +1020,7 @@ class BookApiTest {
           restTemplate.exchange(
               "/api/books/" + created.id(),
               HttpMethod.PUT,
-              new HttpEntity<>(new BookUpdateRequest("x", null, null, null, BookStatus.DONE)),
+              new HttpEntity<>(new BookUpdateRequest("x", null, null, null, BookStatus.DONE, null)),
               String.class);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -913,7 +1032,10 @@ class BookApiTest {
     @Test
     void nonNumericIdIsRejected() {
       ResponseEntity<JsonNode> response =
-          putRaw(asDev(), "abc", new BookUpdateRequest("t", null, null, null, BookStatus.READING));
+          putRaw(
+              asDev(),
+              "abc",
+              new BookUpdateRequest("t", null, null, null, BookStatus.READING, null));
 
       assertProblemDetail(response, HttpStatus.BAD_REQUEST, "BAD_REQUEST");
     }
@@ -946,7 +1068,7 @@ class BookApiTest {
     @Test
     void progressLeavesEverythingElseAlone() {
       BookResponse created =
-          create(asDev(), new BookCreateRequest("書名", "著者", "isbn", 300, BookStatus.READING));
+          create(asDev(), new BookCreateRequest("書名", "著者", "isbn", 300, BookStatus.READING, null));
 
       ResponseEntity<JsonNode> response = progress(asDev(), created.id(), 300);
 

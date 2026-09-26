@@ -22,4 +22,5 @@ public record Book(
     Short rating,
     String note,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt) {}
+    OffsetDateTime updatedAt,
+    String coverUrl) {}

@@ -75,7 +75,8 @@ public class BookService {
         request.author(),
         request.isbn(),
         request.totalPages(),
-        request.statusOrDefault());
+        request.statusOrDefault(),
+        request.coverUrl());
   }
 
   /**
@@ -107,7 +108,8 @@ public class BookService {
             request.author(),
             request.isbn(),
             request.totalPages(),
-            request.status());
+            request.status(),
+            request.coverUrl());
     if (book == null) {
       Book existing = requireOwned(id, userId);
       throw new ValidationException(
