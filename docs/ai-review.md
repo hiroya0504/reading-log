@@ -1,0 +1,113 @@
+# AI レビュー
+
+Claude Code による 2 段構成（検出→検証）のコードレビュー。ローカル（Skill）と GitHub Actions で、同じ `.claude/` の定義を共有する。
+
+## 設計方針
+
+1. **網羅性より精度を優先する。** 誤指摘が続くと、人は AI レビューを読まなくなる。検出の後に検証を挟み、迷ったら出さない。
+2. **決定的にできることは AI にやらせない。**
+   - フォーマットは Spotless、テストの成否は `make test-backend` に任せる。
+   - コメントの書式、件数の上限、投稿は `post-review.js` が行う。
+   - レイヤ依存は ArchUnit に任せたいが、MVP 期間中は導入しない（`CLAUDE.md`）。当面は人間が見る。
+3. **ルール単位で効果を測って改善する。** 指摘にルール ID を埋め込み、ルールごとに「取り込まれたか」を集計する。
+
+## 構成
+
+```
+.claude/
+├── agents/review-detector.md          検出役。差分からルール違反の候補を出す
+├── agents/review-verifier.md          検証役。1 件ずつ KEEP / DROP を判定する（迷ったら DROP）
+├── skills/ai-review/SKILL.md          司令塔の手順。自分ではレビューしない
+├── skills/ai-review/references/rules.md   ルール定義
+└── settings.json                      ローカルで git diff / git show / gh pr diff を許可
+.github/
+├── workflows/ai-review.yml
+├── ai-review-schema.json              Claude の最終出力の JSON スキーマ
+└── scripts/post-review.js (+ .test.js)    PR への投稿
+scripts/review_metrics.py              ルール別の集計
+```
+
+```
+static-checks ─▶ ai-review ─▶ post-review ─▶ remove-label
+ Spotless          Claude       post-review.js   ai-review ラベルでの
+ + テスト          読み取り専用   投稿権限あり       再実行時だけ
+                    │
+                    ├─ review-detector ×(8 ファイルごと)
+                    ├─ review-verifier ×(指摘ごと)
+                    └─ 集約 → {detected_count, findings[]}
+```
+
+- 対象は `backend/src/main/java/` 配下の `.java` だけ。テストコードとフロントエンドは対象外。
+- Claude が動くジョブには、PR への書き込み権限を渡さない（`pull-requests: read`）。投稿は別ジョブの `post-review.js` が行う。
+- `.claude/`、スキーマ、投稿スクリプトは**ベースブランチの内容**で上書きしてから使う。PR の中でルールを緩めても、その PR 自身のレビューには効かない。ベースにまだ無い場合（導入 PR など）は、PR ブランチの内容を使う。
+
+## 使い方
+
+### ローカル
+
+Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`origin/main...HEAD` の差分と未コミット分を見て、結果を画面に表示する。どこにも投稿しない。
+
+### CI
+
+| 契機 | 動き |
+| --- | --- |
+| PR の作成（opened） | 自動で走る |
+| ドラフトから Ready for review | 自動で走る |
+| `ai-review` ラベルを付ける | 再実行する。終わるとラベルは自動で外れる |
+| push（synchronize） | 走らない。必要なら上のラベルで再実行する |
+
+ドラフトの PR は対象外。`static-checks`（Spotless とテスト）が落ちた場合は、AI レビューを実行しない。
+
+### 投稿の形
+
+- 差分内の指摘は、重要度順に**最大 5 件**をインラインコメントにする。指摘 1 件につき 1 スレッド。
+- 差分外の指摘と、上限を超えた分はレビュー本文（サマリ）に書く。差分外の行にインラインコメントを付けると、レビュー全体が 422 で失敗するため。
+- すべてを 1 回のレビュー（`COMMENT`）で投稿するので、通知は 1 回。
+- インラインコメントのフッターのリアクションで評価してほしい。
+
+  | リアクション | 意味 |
+  | --- | --- |
+  | 👍 | 対応した |
+  | 👎 | 誤り |
+  | 😕 | 正しいが不要 |
+
+## ルールの追加・変更
+
+`rules.md` を編集する。各ルールには、ID・重要度・「指摘すること」・「指摘しないこと」を必ず書く。誤検出の多くは「指摘しないこと」で防ぐ。
+
+- 初期ルールは DEF-001（`@Transactional` の自己呼び出し）、DEF-002（例外の握りつぶし）、SEC-001（MyBatis の `${}`）の 3 つ。
+- PERF 次元は、MVP 期間中はルールを置かない。
+- ルールを変えた PR のレビューには、変更前のルールが使われる（上記の上書きのため）。
+- サマリの先頭に `<!-- ai-review:summary rules=<SHA> -->` が入るので、ルールの変更前後で効果を比べられる。
+
+## 効果の測定
+
+```bash
+python3 scripts/review_metrics.py --since 2026-09-01
+```
+
+ルールごとに、件数、outdated 率、resolved 率、👍 / 👎 / 😕 の数を出す。件数が少ないルールは参考値として表示する。
+
+| 傾向 | 対応 |
+| --- | --- |
+| 👎 が多い | 検証役が落とすべきものを通している。`rules.md` の「指摘しないこと」を見直す |
+| 😕 が多い、または outdated 率が低い | 当たっていても直されていない。ルールの削除を検討する |
+| outdated 率が高い | 機械的に直せている。静的解析への移行を検討する |
+
+outdated は、行が変更されたことを示すだけで、指摘を受けて直したことの証明ではない（rebase でも outdated になる）。
+
+## セットアップ
+
+1. リポジトリの Secrets に `ANTHROPIC_API_KEY` を登録する。
+2. Claude GitHub App をインストールする（`/install-github-app`、または https://github.com/apps/claude ）。このワークフローは `github_token` に `GITHUB_TOKEN` を渡しているので、App が無くても動く。
+3. `ai-review` ラベルを作る（`gh label create ai-review`）。
+4. 推奨: `CODEOWNERS` で `.claude/` と `.github/` を保護する。上書きの仕組みは「その PR 自身」にしか効かないため、ルールの変更そのものは人間がレビューする必要がある。
+
+Bedrock / Vertex AI に切り替える場合は、`ai-review.yml` のコメントを参照。
+
+## 将来の拡張（今回はやらない）
+
+- `original_commit_id` とマージ時点のファイルを比較した、行単位での「直したか」の判定
+- 週次の集計ワークフロー（`schedule` トリガー）と、結果の CSV への蓄積
+- 人間のレビューコメントを基準線にした比較
+- フロントエンド（TypeScript）とテストコードへの対象拡大

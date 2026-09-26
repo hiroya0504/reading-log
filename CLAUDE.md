@@ -27,6 +27,12 @@ reading-log/
 | `make format` | 自動整形 |
 | `make help` | 全コマンド一覧 |
 
+Claude Code のスキル:
+
+| スキル | 用途 |
+| --- | --- |
+| `/ai-review` | 検出→検証の 2 段構成の AI レビュー。CI（`.github/workflows/ai-review.yml`）と同じ定義を使う。仕組みは `docs/ai-review.md` |
+
 ## API 契約ハーネス（このプロジェクトの中核）
 
 backend と frontend は `docs/openapi.json` を介して型で繋がっている。
@@ -65,3 +71,4 @@ Controller/DTO を変更
 - `backend/CLAUDE.md` — バックエンド規約
 - `frontend/CLAUDE.md` — フロントエンド規約
 - `docs/architecture.md` — 全体像と設計判断
+- `docs/ai-review.md` — AI レビューの仕組み、運用、ルールの改善方法

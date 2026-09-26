@@ -1,0 +1,234 @@
+// Posts the AI review result to the pull request.
+//
+// Everything that can be decided deterministically lives here rather than in the model:
+// which findings become inline comments, how many, in what order, and what the comments look
+// like. Claude only returns {detected_count, findings[]}; it has no permission to post.
+//
+// Called from actions/github-script in .github/workflows/ai-review.yml. The pure functions are
+// exported separately so post-review.test.js can exercise them without GitHub.
+
+const MAX_INLINE = 5;
+const SEVERITY_ORDER = { high: 0, medium: 1 };
+const FOOTER = '🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要';
+
+/**
+ * Lines on the new side of a unified-diff patch that GitHub accepts review comments on:
+ * added lines and context lines. Deleted lines have no new-side number.
+ * `patch` is the per-file hunk text from pulls.listFiles (no file headers). It is undefined for
+ * binary or very large files, in which case nothing is commentable.
+ */
+function parsePatch(patch) {
+  const lines = new Set();
+  if (!patch) return lines;
+  let newLine = null;
+  for (const raw of patch.split('\n')) {
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
+    if (hunk) {
+      newLine = Number(hunk[1]);
+      continue;
+    }
+    if (newLine === null) continue;
+    if (raw.startsWith('\\')) continue; // "\ No newline at end of file"
+    if (raw.startsWith('-')) continue;
+    if (raw.startsWith('+') || raw.startsWith(' ')) {
+      lines.add(newLine);
+      newLine += 1;
+    }
+  }
+  return lines;
+}
+
+/** Stable sort by severity (high first), then file, then line. */
+function sortFindings(findings) {
+  return findings
+    .map((f, i) => ({ f, i }))
+    .sort(
+      (a, b) =>
+        (SEVERITY_ORDER[a.f.severity] ?? 99) - (SEVERITY_ORDER[b.f.severity] ?? 99) ||
+        a.f.file.localeCompare(b.f.file) ||
+        a.f.line - b.f.line ||
+        a.i - b.i,
+    )
+    .map(({ f }) => f);
+}
+
+/**
+ * Splits findings into inline comments and summary-only entries.
+ * Inline: in-diff findings, highest severity first, at most `max`.
+ * Summary: findings on lines GitHub would reject (a single such comment makes the whole review
+ * fail with 422) plus in-diff findings beyond the cap.
+ */
+function partition(findings, commentableByFile, max = MAX_INLINE) {
+  const inline = [];
+  const outOfDiff = [];
+  const overflow = [];
+  for (const f of sortFindings(findings)) {
+    const commentable = commentableByFile.get(f.file);
+    if (!commentable || !commentable.has(f.line)) {
+      outOfDiff.push(f);
+    } else if (inline.length < max) {
+      inline.push(f);
+    } else {
+      overflow.push(f);
+    }
+  }
+  return { inline, outOfDiff, overflow };
+}
+
+function inlineBody(f) {
+  return [
+    `<!-- ai-review:rule=${f.rule_id} -->`,
+    `**${f.rule_id}**（${f.severity}）`,
+    '',
+    f.issue,
+    '',
+    `**修正案**: ${f.suggestion}`,
+    '',
+    '---',
+    FOOTER,
+  ].join('\n');
+}
+
+function summaryLine(f) {
+  return `- **${f.rule_id}**（${f.severity}）\`${f.file}:${f.line}\` ${f.issue}\n  - 修正案: ${f.suggestion}`;
+}
+
+function summaryBody({ detectedCount, findings, parts, rulesSha }) {
+  const out = [
+    `<!-- ai-review:summary rules=${rulesSha} -->`,
+    '## 🤖 AIレビュー',
+    '',
+    `検出 ${detectedCount}件 → 検証通過 ${findings.length}件（インライン ${parts.inline.length}件）`,
+  ];
+  if (findings.length === 0) {
+    out.push('', 'ルール定義に当てはまる指摘はありませんでした。');
+  }
+  if (parts.outOfDiff.length > 0) {
+    out.push(
+      '',
+      `### 差分外の指摘（${parts.outOfDiff.length}件）`,
+      '',
+      'コメントできない行（差分に含まれない行）への指摘です。',
+      '',
+      ...parts.outOfDiff.map(summaryLine),
+    );
+  }
+  if (parts.overflow.length > 0) {
+    out.push(
+      '',
+      `### 上限を超えた指摘（${parts.overflow.length}件）`,
+      '',
+      `インラインコメントは重要度順に最大 ${MAX_INLINE} 件までです。`,
+      '',
+      ...parts.overflow.map(summaryLine),
+    );
+  }
+  return out.join('\n');
+}
+
+/** Parses and validates the structured_output string. Throws with a readable message. */
+function parseOutput(raw) {
+  if (!raw || !raw.trim()) throw new Error('structured_output が空です');
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`structured_output が JSON として読めません: ${e.message}`);
+  }
+  if (!Number.isInteger(data?.detected_count) || data.detected_count < 0) {
+    throw new Error('detected_count が 0 以上の整数ではありません');
+  }
+  if (!Array.isArray(data.findings)) throw new Error('findings が配列ではありません');
+  data.findings.forEach((f, i) => {
+    for (const key of ['rule_id', 'file', 'issue', 'suggestion']) {
+      if (typeof f?.[key] !== 'string' || f[key] === '') {
+        throw new Error(`findings[${i}].${key} が空、または文字列ではありません`);
+      }
+    }
+    if (!(f.severity in SEVERITY_ORDER)) {
+      throw new Error(`findings[${i}].severity が high / medium ではありません`);
+    }
+    if (!Number.isInteger(f.line) || f.line < 1) {
+      throw new Error(`findings[${i}].line が 1 以上の整数ではありません`);
+    }
+  });
+  return data;
+}
+
+/** Entry point for actions/github-script. */
+async function run({ github, context, core, structuredOutput, rulesSha }) {
+  let data;
+  try {
+    data = parseOutput(structuredOutput);
+  } catch (e) {
+    core.setFailed(e.message);
+    return;
+  }
+
+  const pr = context.payload.pull_request;
+  const { owner, repo } = context.repo;
+
+  const files = await github.paginate(github.rest.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: pr.number,
+    per_page: 100,
+  });
+  const commentableByFile = new Map(files.map((f) => [f.filename, parsePatch(f.patch)]));
+
+  const parts = partition(data.findings, commentableByFile);
+  const body = summaryBody({
+    detectedCount: data.detected_count,
+    findings: data.findings,
+    parts,
+    rulesSha: rulesSha || 'unknown',
+  });
+
+  // One createReview call so the author gets one notification, not one per comment.
+  await github.rest.pulls.createReview({
+    owner,
+    repo,
+    pull_number: pr.number,
+    commit_id: pr.head.sha,
+    event: 'COMMENT',
+    body,
+    comments: parts.inline.map((f) => ({
+      path: f.file,
+      line: f.line,
+      side: 'RIGHT',
+      body: inlineBody(f),
+    })),
+  });
+
+  await core.summary
+    .addHeading('AIレビュー', 2)
+    .addTable([
+      [
+        { data: '検出', header: true },
+        { data: '検証通過', header: true },
+        { data: 'インライン', header: true },
+        { data: '差分外', header: true },
+        { data: '上限超過', header: true },
+      ],
+      [
+        String(data.detected_count),
+        String(data.findings.length),
+        String(parts.inline.length),
+        String(parts.outOfDiff.length),
+        String(parts.overflow.length),
+      ],
+    ])
+    .addRaw(`rules.md: ${rulesSha || 'unknown'}`)
+    .write();
+}
+
+module.exports = {
+  run,
+  parsePatch,
+  partition,
+  sortFindings,
+  parseOutput,
+  inlineBody,
+  summaryBody,
+  MAX_INLINE,
+};
