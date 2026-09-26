@@ -132,6 +132,22 @@ describe("Bookshelf", () => {
     expect(screen.queryByText(/ページ|%/)).not.toBeInTheDocument();
   });
 
+  it("marks the whole-shelf link as in use when there is no filter", () => {
+    render(
+      <Bookshelf
+        books={[book()]}
+        total={1}
+        counts={{ READING: 0, WANT_TO_READ: 1, DONE: 0 }}
+        filter={undefined}
+        page={1}
+      />,
+    );
+
+    const filters = within(screen.getByRole("navigation", { name: "状態で絞り込む" }));
+    expect(filters.getByRole("link", { name: "すべて 1" })).toHaveAttribute("aria-current", "page");
+    expect(filters.getByRole("link", { name: "読みたい 1" })).not.toHaveAttribute("aria-current");
+  });
+
   it("offers a filter per status with its count, marking the one in use", () => {
     render(
       <Bookshelf
