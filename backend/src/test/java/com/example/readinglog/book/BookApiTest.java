@@ -461,6 +461,42 @@ class BookApiTest {
     assertThat(read.updatedAt()).isAfter(created.updatedAt());
   }
 
+  /**
+   * The editable fields are the only ones PUT touches. Progress, rating and note get their own
+   * write paths in later milestones; a stray column in the SET clause would silently reset them,
+   * and a freshly created book (0 / null / null) could not tell.
+   */
+  @Test
+  void updateLeavesProgressRatingAndNoteAlone() {
+    BookResponse created = create(asDev(), "t");
+    // No API writes these columns yet, so the fixture goes in directly.
+    jdbc.update(
+        "UPDATE books SET current_page = ?, rating = ?, note = ? WHERE id = ?",
+        42,
+        4,
+        "感想",
+        created.id());
+
+    ResponseEntity<BookResponse> response =
+        asDev()
+            .exchange(
+                "/api/books/" + created.id(),
+                HttpMethod.PUT,
+                new HttpEntity<>(new BookUpdateRequest("新題", null, null, 100, BookStatus.READING)),
+                BookResponse.class);
+
+    // Both the RETURNING row and a fresh read, for the reason updateReplacesEveryEditableField
+    // gives.
+    assertThat(response.getBody())
+        .extracting(BookResponse::currentPage, BookResponse::rating, BookResponse::note)
+        .containsExactly(42, (short) 4, "感想");
+    BookResponse read =
+        asDev().getForEntity("/api/books/" + created.id(), BookResponse.class).getBody();
+    assertThat(read)
+        .extracting(BookResponse::currentPage, BookResponse::rating, BookResponse::note)
+        .containsExactly(42, (short) 4, "感想");
+  }
+
   /** PUT is a full replacement: an omitted optional field is cleared, not kept. */
   @Test
   void updateClearsOmittedOptionalFields() {
