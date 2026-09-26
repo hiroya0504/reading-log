@@ -118,16 +118,17 @@ test('parseOutput: rejects empty, non-JSON and malformed findings', () => {
   assert.throws(() => parseOutput(''), /空/);
   assert.throws(() => parseOutput('not json'), /JSON/);
   assert.throws(() => parseOutput('{"findings":[]}'), /detected_count/);
+  assert.throws(() => parseOutput('{"detected_count":0,"findings":[]}'), /failed_groups/);
   assert.throws(
-    () => parseOutput(JSON.stringify({ detected_count: 1, findings: [finding({ line: 0 })] })),
+    () => parseOutput(JSON.stringify({ detected_count: 1, failed_groups: 0, findings: [finding({ line: 0 })] })),
     /line/,
   );
   assert.throws(
     () =>
-      parseOutput(JSON.stringify({ detected_count: 1, findings: [finding({ severity: 'low' })] })),
+      parseOutput(JSON.stringify({ detected_count: 1, failed_groups: 0, findings: [finding({ severity: 'low' })] })),
     /severity/,
   );
-  assert.deepEqual(parseOutput('{"detected_count":0,"findings":[]}').findings, []);
+  assert.deepEqual(parseOutput('{"detected_count":0,"failed_groups":0,"findings":[]}').findings, []);
 });
 
 function mocks(files) {
@@ -170,6 +171,7 @@ test('run: posts exactly one review with inline comments and summary', async () 
   const m = mocks([{ filename: FILE, patch: PATCH }]);
   const structuredOutput = JSON.stringify({
     detected_count: 3,
+    failed_groups: 0,
     findings: [finding({ line: 41, severity: 'high' }), finding({ line: 99 })],
   });
   await run({ ...m, structuredOutput, rulesSha: 'sha1' });
@@ -190,4 +192,26 @@ test('run: invalid output fails the step and posts nothing', async () => {
   await run({ ...m, structuredOutput: '', rulesSha: 'sha1' });
   assert.match(m.calls.failed, /空/);
   assert.equal(m.calls.createReview.length, 0);
+});
+
+test('summaryBody: failed groups replace "no findings" with an incomplete-review warning', () => {
+  const parts = partition([], new Map());
+  const failed = summaryBody({ detectedCount: 0, failedGroups: 1, findings: [], parts, rulesSha: 's' });
+  assert.match(failed, /検出に失敗したファイルグループが 1 件/);
+  assert.doesNotMatch(failed, /指摘はありませんでした/);
+  const ok = summaryBody({ detectedCount: 0, failedGroups: 0, findings: [], parts, rulesSha: 's' });
+  assert.match(ok, /指摘はありませんでした/);
+});
+
+test('run: failed groups still post the review, then fail the step', async () => {
+  const m = mocks([{ filename: FILE, patch: PATCH }]);
+  const structuredOutput = JSON.stringify({
+    detected_count: 1,
+    failed_groups: 2,
+    findings: [finding({ line: 41 })],
+  });
+  await run({ ...m, structuredOutput, rulesSha: 'sha1' });
+  assert.equal(m.calls.createReview.length, 1);
+  assert.match(m.calls.createReview[0].body, /2 件/);
+  assert.match(m.calls.failed, /2 件/);
 });

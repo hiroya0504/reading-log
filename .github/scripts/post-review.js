@@ -93,14 +93,22 @@ function summaryLine(f) {
   return `- **${f.rule_id}**（${f.severity}）\`${f.file}:${f.line}\` ${f.issue}\n  - 修正案: ${f.suggestion}`;
 }
 
-function summaryBody({ detectedCount, findings, parts, rulesSha }) {
+function summaryBody({ detectedCount, failedGroups = 0, findings, parts, rulesSha }) {
   const out = [
     `<!-- ai-review:summary rules=${rulesSha} -->`,
     '## 🤖 AIレビュー',
     '',
     `検出 ${detectedCount}件 → 検証通過 ${findings.length}件（インライン ${parts.inline.length}件）`,
   ];
-  if (findings.length === 0) {
+  if (failedGroups > 0) {
+    // A failed detector group returns nothing, which would otherwise read as "no findings".
+    out.push(
+      '',
+      `> [!WARNING]`,
+      `> 検出に失敗したファイルグループが ${failedGroups} 件あります。**このレビューは不完全です。**`,
+      '> 指摘が無いことは、問題が無いことを意味しません。`ai-review` ラベルで再実行してください。',
+    );
+  } else if (findings.length === 0) {
     out.push('', 'ルール定義に当てはまる指摘はありませんでした。');
   }
   if (parts.outOfDiff.length > 0) {
@@ -137,6 +145,9 @@ function parseOutput(raw) {
   }
   if (!Number.isInteger(data?.detected_count) || data.detected_count < 0) {
     throw new Error('detected_count が 0 以上の整数ではありません');
+  }
+  if (!Number.isInteger(data.failed_groups) || data.failed_groups < 0) {
+    throw new Error('failed_groups が 0 以上の整数ではありません');
   }
   if (!Array.isArray(data.findings)) throw new Error('findings が配列ではありません');
   data.findings.forEach((f, i) => {
@@ -179,6 +190,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
   const parts = partition(data.findings, commentableByFile);
   const body = summaryBody({
     detectedCount: data.detected_count,
+    failedGroups: data.failed_groups,
     findings: data.findings,
     parts,
     rulesSha: rulesSha || 'unknown',
@@ -209,6 +221,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
         { data: 'インライン', header: true },
         { data: '差分外', header: true },
         { data: '上限超過', header: true },
+        { data: '検出失敗グループ', header: true },
       ],
       [
         String(data.detected_count),
@@ -216,10 +229,16 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
         String(parts.inline.length),
         String(parts.outOfDiff.length),
         String(parts.overflow.length),
+        String(data.failed_groups),
       ],
     ])
     .addRaw(`rules.md: ${rulesSha || 'unknown'}`)
     .write();
+
+  // Post what was found, then fail the job so an incomplete review is visible in the checks.
+  if (data.failed_groups > 0) {
+    core.setFailed(`検出に失敗したファイルグループが ${data.failed_groups} 件あります（レビューは不完全）`);
+  }
 }
 
 module.exports = {
