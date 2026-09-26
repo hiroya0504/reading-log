@@ -1,7 +1,7 @@
 # AI レビュー
 
 Claude Code による 2 段構成（検出→検証）のコードレビュー。ローカル（Skill）と GitHub Actions で、同じ `.claude/` の定義を共有する。
-検出役は観点ごとに分かれている（規約準拠・セキュリティ・テスト）。検証役は全観点で共通。
+検出役は観点ごとに分かれている（規約準拠・セキュリティ・バグ・テストの骨抜き）。検証役は全観点で共通。
 
 ## 設計方針
 
@@ -16,20 +16,34 @@ Claude Code による 2 段構成（検出→検証）のコードレビュー�
 
 | 観点 | 検出役 | 判定の基準 | 対象 | 指摘の ID |
 | --- | --- | --- | --- | --- |
-| 規約準拠 | `review-detector-rules` | `rules.md` のルールだけ | 本体の `.java` | `DEF-001` などのルール ID |
+| 規約準拠 | `review-detector-rules` | `rules.md` と `test-rules.md` のルールだけ | `rules.md` は本体の `.java`。`test-rules.md` は本体とテストの `.java`、frontend の `.ts` / `.tsx` | `DEF-001`・`TEST-001` などのルール ID |
 | セキュリティ | `review-detector-security` | 基準文書なし。エージェント定義の観点の説明 | 本体の `.java` | `SECURITY` |
-| テスト | `review-detector-tests` | `test-rules.md` のルール（どれにも当たらないものはエージェント定義の観点の説明） | 本体とテストの `.java`、frontend の `.ts` / `.tsx` | `TEST-001` などのルール ID。ルール外は `TESTS` |
+| バグ | `review-detector-bugs` | 基準文書なし。`common.md` の「バグの観点での正しさの出どころ」 | 本体の `.java`、frontend の本体の `.ts` / `.tsx` | `BUGS` |
+| テストの骨抜き | `review-detector-hollow-tests` | 基準文書なし。`common.md` の「骨抜きの観点での経路」 | 本体とテストの `.java`、frontend の `.ts` / `.tsx` | `HOLLOW` |
 
-- `rules.md` に基づいてレビューするのは規約準拠の検出役だけ。テストの検出役は `test-rules.md` に基づく。セキュリティは、ルールに書いていない問題も拾う。
+観点は 2 種類ある。
+
+- **ルール準拠を確かめる観点**: 規約準拠だけ。`rules.md` と `test-rules.md` の両方を 1 つの検出役が見る。ルールに当てはまらないものは、正しくても出さない。
+- **ルールの外を探す観点**: セキュリティ・バグ・テストの骨抜き。ルールに当てはまるものは出さない（規約準拠の担当）。
+  **目的はルールの外にある問題を見つけ、ルールに昇格させること**（下の「ルール外の観点からルールへ」）。
+
+経緯:
+
 - **テストの観点は、2026-09-27 にルール化した。** それまでの `TESTS` の指摘（PR #13・#15 の 6 件）は 👎 が 0 件で、精度に問題は無かった。
   ただ、境界値の片側しか無い、書き込みのレスポンスを見ていない、といった**同じ型の穴が PR ごとに繰り返されていた**。
   原因はレビューではなく書く側に規約が無いことだったので、書く側の規約とレビューの判定基準を 1 つの文書（`test-rules.md`）にした。
-  土台は古典派（Khorikov）。理由は `test-rules.md` の冒頭にある。ルールに当たらない穴は従来どおり `TESTS` で出る。
-- **テストの観点は frontend も対象にしている**（2026-09-27 から）。規約準拠とセキュリティは backend だけ。
+  土台は古典派（Khorikov）。理由は `test-rules.md` の冒頭にある。
+- **同日、`test-rules.md` への準拠は規約準拠の検出役に移し、テストの検出役は「骨抜き」に絞った**（`TESTS` は廃止し、`HOLLOW` にした）。
+  ルール化した後のテストの検出役は、結局ルール準拠のチェックになっていて、規約準拠と役割が同じだったため。
+  骨抜きは、AI がテストを Green のまま中身を抜く 3 つの型（意味のない通るテスト・ダミー返却・意図的なスキップ）。
+  どれも見た目は全件合格で、テストの成否やカバレッジでは見つからない（松本 淳太郎・サカモト『プロフェッショナルAI駆動開発』p.175）。
+  ルールの外にあった「テストの穴」（確かめるテストが無い）は、`TEST-001` が受ける。
+- **同日、バグの観点（`BUGS`）を足した。** それまでは組み込みの `/code-review` に任せていたが、`/code-review` の指摘は ID が付かず、集計してルールに昇格させる流れに乗らないため。
+- **テストのルールと骨抜きは frontend も対象にしている**（2026-09-27 から）。`rules.md` とセキュリティは backend だけ。
   frontend では、モックにしてよい境界（`client.ts`、Next.js の実行時、props で渡す Server Action）を `test-rules.md` の「frontend での境界」に書いている。
 - 全観点に共通の「対象外」と原則（「かもしれない」だけの指摘は出さない、など）は `common.md` にある。
 - **ルール外の観点は、規約準拠より誤指摘が出やすい。** 検証役が照合できる基準文書が無く、コードで事実と経路を確かめるだけになるため。`review_metrics.py` の 👎 を見て、多ければ基準文書を作るか、よく出る指摘をルールに昇格させる。
-- **テストの観点では、原則 1 の「経路」を「退行が見逃される経路」として読む**（`common.md` の「テストの観点での経路」）。
+- **`TEST-001`〜`TEST-005` では、原則 1 の「経路」を「退行が見逃される経路」として読む**（`common.md` の「テストの観点での経路」）。骨抜きは、「誤った実装でもテストが通ること」を示す（`common.md` の「骨抜きの観点での経路」）。
   テストの穴の指摘は、いつも「今は正しく動くコード」についての指摘になる。「今の実装で壊れる経路」を求めると、どれも DROP にできてしまう。
   PR #13 では、テストの指摘 4 件が 1 回目で全部検出されていた。それなのに、検証役が同じ指摘を DROP にしたり KEEP にしたりしたため、3 回のレビューに分かれて出た。
 - 観点をまたいだ指摘は統合しない。同じ行に複数の観点のコメントが付くことがある。観点が違えば、同じ行でも中身は別の問題であることが多いため（PR #12 で、統合によって正しいテストの指摘が 2 件消えた）。
@@ -42,20 +56,20 @@ AI レビューが通っても、次のものは確かめられていない。`c
 
 | 見ないもの | 担当 | 理由 |
 | --- | --- | --- |
-| 正しさのバグ（null の扱い、ロジックの誤りなど） | 組み込みの `/code-review` | ちょうどこの領域を担当している。4 つ目の検出役を足すのは、`/code-review` で足りないと分かってから |
-| 仕様の正しさ | 人間 | 検出役に仕様の出どころ（Issue、PR 本文）を渡していない。テストの観点は差分のコード・javadoc を正として扱うので、実装と javadoc がそろって仕様を間違えていても出ない |
+| 仕様の正しさ | 人間 | 検出役に仕様の出どころ（Issue、PR 本文）を渡していない。バグとテストの観点は差分のコード・javadoc を正として扱うので、実装と javadoc がそろって仕様を間違えていても出ない |
 | パフォーマンス | なし | MVP 期間中はやらない（`CLAUDE.md`） |
 
 ## 構成
 
 ```
 .claude/
-├── agents/review-detector-rules.md    検出役（規約準拠）
+├── agents/review-detector-rules.md    検出役（規約準拠。rules.md と test-rules.md）
 ├── agents/review-detector-security.md 検出役（セキュリティ）
-├── agents/review-detector-tests.md    検出役（テスト）
+├── agents/review-detector-bugs.md     検出役（バグ）
+├── agents/review-detector-hollow-tests.md  検出役（テストの骨抜き）
 ├── agents/review-verifier.md          検証役。全観点共通。1 件ずつ KEEP / DROP を判定する（迷ったら DROP）
 ├── skills/ai-review/SKILL.md          司令塔の手順。自分ではレビューしない
-├── skills/ai-review/references/common.md  全観点に共通の「対象外」と原則
+├── skills/ai-review/references/common.md  全観点に共通の「対象外」と原則。ルール外の観点の判定基準
 ├── skills/ai-review/references/rules.md   規約準拠のルール定義
 ├── skills/ai-review/references/test-rules.md  テストのルール定義（書く側の規約を兼ねる）
 └── settings.json                      ローカルで git diff / git show / gh pr diff を許可
@@ -71,12 +85,12 @@ static-checks ─▶ ai-review ─▶ post-review ─▶ remove-label
  Spotless          Claude       post-review.js   ai-review ラベルでの
  + テスト          読み取り専用   投稿権限あり       再実行時だけ
                     │
-                    ├─ review-detector-{rules,security,tests} ×(観点 × 8 ファイルごと)
+                    ├─ review-detector-{rules,security,bugs,hollow-tests} ×(観点 × 8 ファイルごと)
                     ├─ review-verifier ×(指摘ごと)
                     └─ 集約 → {detected_count, findings[]}
 ```
 
-- 対象は `backend/src/main/java/` 配下の `.java`。テストの観点だけ、`backend/src/test/java/` と `frontend/src/` の `.ts` / `.tsx`（生成物の `schema.d.ts` を除く）も見る。
+- 対象は `backend/src/main/java/` 配下の `.java` と、`backend/src/test/java/`、`frontend/src/` の `.ts` / `.tsx`（生成物の `schema.d.ts` を除く）。観点ごとの対象は上の表。
 - Claude が動くジョブには、PR への書き込み権限を渡さない（`pull-requests: read`）。投稿は別ジョブの `post-review.js` が行う。
 - モデルは固定している（下の「モデルの選定」）。既定のモデルは勝手に変わり、ルール別の効果測定の前後比較が崩れるため。変えるときは、変えた日付を記録して比較から外す。
 - 検出役が差分を取得できなかったなどで失敗したグループがあると、`failed_groups` が 1 以上になる。そのときは「指摘なし」とは書かず、不完全なレビューである旨をサマリに出したうえで、ジョブを失敗にする。
@@ -119,7 +133,7 @@ Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`
 | 役割 | モデル | 設定場所 |
 | --- | --- | --- |
 | 司令塔 | `claude-sonnet-5` | `ai-review.yml` の `--model` |
-| 検出役（3 観点とも） | `claude-opus-5-5` | `.claude/agents/review-detector-*.md` の `model` |
+| 検出役（4 観点とも） | `claude-opus-5-5` | `.claude/agents/review-detector-*.md` の `model` |
 | 検証役 | `claude-opus-5-5` | `.claude/agents/review-verifier.md` の `model` |
 
 - 司令塔は呼び分けと集約をするだけなので Sonnet で足りる。
@@ -134,13 +148,27 @@ Claude Code で `/ai-review`、または「PR 出す前に見て」と頼む。`
 | Opus | 3 | 7/7、7/7、7/7 | 0 | $0.90〜1.04 | 110〜240 秒 |
 
 Opus は単価が高いが、少ない手数で答えにたどり着くため、全体の費用はむしろ下がった。試行回数が少ないので傾向として扱う。
-この比較は観点を分ける前（検出役 1 体）のもの。観点を 3 つに分けたので、検出役の費用はおよそ 3 倍になる見込み。
+この比較は観点を分ける前（検出役 1 体）のもの。観点を 4 つに分けたので、検出役の費用はおよそ 4 倍になる見込み。
 
 ## ルールの追加・変更
 
 規約準拠は `rules.md`、テストは `test-rules.md` を編集する。各ルールには、ID・重要度・「指摘すること」・「指摘しないこと」を必ず書く。誤検出の多くは「指摘しないこと」で防ぐ。
 見出しは `## <ID> <タイトル>` の形にする（`post-review.js` がコメントに載せるルール名を、両方のファイルのこの見出しから読む）。
-ルール外の観点（`SECURITY` / `TESTS`）でよく出る指摘は、ルールに昇格させると、検証役が照合できるようになり精度が上がる。
+
+### ルール外の観点からルールへ
+
+バグ（`BUGS`）とテストの骨抜き（`HOLLOW`）は、**ルールを増やすための探索**として置いている。セキュリティ（`SECURITY`）も同じ扱い。
+
+```
+ルール外の観点が指摘する（issue の先頭に【型】）
+   → 👍 が付いた指摘を型ごとに数える
+   → 同じ型が繰り返されたら、rules.md / test-rules.md にルールとして書く（「指摘すること」「指摘しないこと」）
+   → 以後は規約準拠の検出役がルール ID で出す。書く側の規約にもなる
+```
+
+- 型は `issue` の先頭の `【】` に入っている（`BUGS` は検出役が付ける短い名前、`HOLLOW` は 3 つの型のどれか）。
+- 昇格させると、検証役が照合できる基準文書ができるので精度が上がり、書く側（`CLAUDE.md` から参照）にも効く。
+- テストの骨抜きの型をルールにするときは、`test-rules.md` に足す（書く側が最初から避けられるように）。
 
 - 初期ルールは DEF-001（`@Transactional` の自己呼び出し）、DEF-002（例外の握りつぶし）、SEC-001（MyBatis の `${}`）の 3 つ。
 - PERF 次元は、MVP 期間中はルールを置かない。
@@ -179,4 +207,5 @@ Bedrock / Vertex AI に切り替える場合は、`ai-review.yml` のコメン�
 - `original_commit_id` とマージ時点のファイルを比較した、行単位での「直したか」の判定
 - 週次の集計ワークフロー（`schedule` トリガー）と、結果の CSV への蓄積
 - 人間のレビューコメントを基準線にした比較
-- フロントエンド（TypeScript）の規約準拠とセキュリティの観点（テストの観点は対象にしている）
+- フロントエンド（TypeScript）の `rules.md` とセキュリティの観点（テストのルール・バグ・骨抜きは対象にしている）
+- 型（`issue` の `【】`）ごとの集計を `review_metrics.py` に足す

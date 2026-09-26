@@ -31,7 +31,7 @@ Claude Code のスキル:
 
 | スキル | 用途 |
 | --- | --- |
-| `/ai-review` | 検出→検証の 2 段構成の AI レビュー（規約準拠・セキュリティ・テストの 3 観点）。CI（`.github/workflows/ai-review.yml`）と同じ定義を使う。仕組みは `docs/ai-review.md` |
+| `/ai-review` | 検出→検証の 2 段構成の AI レビュー（規約準拠・セキュリティ・バグ・テストの骨抜きの 4 観点）。CI（`.github/workflows/ai-review.yml`）と同じ定義を使う。仕組みは `docs/ai-review.md` |
 
 ## API 契約ハーネス（このプロジェクトの中核）
 

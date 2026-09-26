@@ -108,7 +108,8 @@ test('parseRuleTitles: reads "## <RULE_ID> <title>" headings and labels perspect
   assert.equal(titles.has('共通ルール'), false);
   // Perspective IDs are always labelled, even though rules.md does not define them.
   assert.equal(titles.get('SECURITY'), 'セキュリティ（ルール外の観点）');
-  assert.equal(titles.get('TESTS'), 'テスト（ルール外の観点）');
+  assert.equal(titles.get('BUGS'), 'バグ（ルール外の観点）');
+  assert.equal(titles.get('HOLLOW'), 'テストの骨抜き（ルール外の観点）');
 });
 
 test('parseRuleTitles: reads test rule headings the same way as rules.md', () => {
@@ -275,7 +276,7 @@ test('countsLine: shows the merged count only when aggregation changed it', () =
 
 function dropped(overrides) {
   return {
-    rule_id: 'TESTS',
+    rule_id: 'HOLLOW',
     file: FILE,
     line: 41,
     issue: 'no test for it',
@@ -291,7 +292,7 @@ test('droppedSection: nothing at all when the verifier dropped nothing', () => {
 test('droppedSection: folded list with rule, location, issue and reason', () => {
   const body = droppedSection([dropped()], parseRuleTitles('')).join('\n');
   assert.match(body, /<details>\n<summary>検証で落とした指摘（1件）<\/summary>/);
-  assert.match(body, /`TESTS` テスト（ルール外の観点）　`backend\/src\/main\/java\/A\.java:41`/);
+  assert.match(body, /`HOLLOW` テストの骨抜き（ルール外の観点）　`backend\/src\/main\/java\/A\.java:41`/);
   assert.match(body, /\*\*指摘\*\*：no test for it/);
   assert.match(body, /\*\*落とした理由\*\*：the current code is correct/);
   assert.ok(body.trimEnd().endsWith('</details>'));
