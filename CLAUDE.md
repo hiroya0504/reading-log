@@ -27,25 +27,6 @@ reading-log/
 | `make format` | 自動整形 |
 | `make help` | 全コマンド一覧 |
 
-Claude Code のスキル:
-
-| スキル | 用途 |
-| --- | --- |
-| `/review` | PR を開く前のレビュー。独立したレビュアー 3 軸 + 反証パスを収束まで回す。定義は `.claude/skills/review/SKILL.md` |
-
-## レビュー手順
-
-**PR を開く前に `/review` を回す。** CI では動かないので、実行を強制する仕組みは無い。
-`disable-model-invocation: true` を設定しているので、Claude 側の判断では起動しない。
-
-- レビュアーはコードを書いたセッションとは別の subagent。**変更の要約を渡さない**（渡すと独立性が消える）。
-- 各指摘は `fixed` / `rejected(理由付き)` / `unresolved` で決着させる。**BLOCKER でも理由を書いて却下してよい**が、
-  黙って無視はしない。決着（`fixed` / `rejected` / `unresolved`）は `.review/<slug>/ledger.md` に残る
-  （`<slug>` = ブランチ名の `/` を `-` に置換したもの）。
-- 収束せずに上限・停滞で止まった場合は**未解決として扱う**。
-- `migration` / `auth` に触れる変更は、レビューの結果に関わらず人間のレビューを挟む。
-- 仕組みと「いつ捨てるか」は `docs/review-harness.md`。
-
 ## API 契約ハーネス（このプロジェクトの中核）
 
 backend と frontend は `docs/openapi.json` を介して型で繋がっている。
@@ -84,4 +65,3 @@ Controller/DTO を変更
 - `backend/CLAUDE.md` — バックエンド規約
 - `frontend/CLAUDE.md` — フロントエンド規約
 - `docs/architecture.md` — 全体像と設計判断
-- `docs/review-harness.md` — `/review` の仕組みと「いつ捨てるか」
