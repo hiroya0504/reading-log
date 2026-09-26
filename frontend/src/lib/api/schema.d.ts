@@ -22,6 +22,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/books/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one of the authenticated user's books. */
+        get: operations["getBook"];
+        /** Replace the editable fields of one of the authenticated user's books. */
+        put: operations["updateBook"];
+        post?: never;
+        /** Delete one of the authenticated user's books. */
+        delete: operations["deleteBook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -133,6 +152,34 @@ export interface components {
              */
             updatedAt: string;
         };
+        BookUpdateRequest: {
+            /**
+             * @description 著者名。省略すると消える。
+             * @example 山田太郎
+             */
+            author?: string;
+            /**
+             * @description ISBN。省略すると消える。形式は検証しない。
+             * @example 9784123456789
+             */
+            isbn?: string;
+            /**
+             * @description 読書状態。必須。
+             * @enum {string}
+             */
+            status: "WANT_TO_READ" | "READING" | "DONE";
+            /**
+             * @description 書名。必須。
+             * @example エラーハンドリング入門
+             */
+            title: string;
+            /**
+             * Format: int32
+             * @description 総ページ数。1 以上。省略すると消える。
+             * @example 320
+             */
+            totalPages?: number;
+        };
         HealthResponse: {
             /**
              * @description Always "ok".
@@ -195,6 +242,74 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["BookResponse"];
                 };
+            };
+        };
+    };
+    getBook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BookResponse"];
+                };
+            };
+        };
+    };
+    updateBook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BookResponse"];
+                };
+            };
+        };
+    };
+    deleteBook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

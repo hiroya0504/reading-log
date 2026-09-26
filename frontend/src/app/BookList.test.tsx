@@ -8,6 +8,7 @@ function book(overrides: Partial<Book> = {}): Book {
     id: 1,
     title: "テスト駆動開発",
     author: "Kent Beck",
+    isbn: null,
     totalPages: 344,
     currentPage: 0,
     status: "WANT_TO_READ",
@@ -72,5 +73,11 @@ describe("BookList", () => {
     render(<BookList books={[book({ author: null })]} />);
 
     expect(screen.getByText(/著者不明/)).toBeInTheDocument();
+  });
+
+  it("links each title to the book's own page", () => {
+    render(<BookList books={[book({ id: 42, title: "リンク先" })]} />);
+
+    expect(screen.getByRole("link", { name: "リンク先" })).toHaveAttribute("href", "/books/42");
   });
 });

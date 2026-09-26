@@ -2,15 +2,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { BookForm } from "./BookForm";
-import type { CreateBookState } from "./create-book-state";
+import type { BookFormState } from "./book-form-state";
 
 /**
  * The real action is server-only, so a stub stands in. That is the reason `BookForm` takes the
  * action as a prop instead of importing it.
  */
-function stubAction(result: CreateBookState) {
+function stubAction(result: BookFormState) {
   // Parameters are declared so the recorded call is typed and `calls[0][1]` is the FormData.
-  return vi.fn(async (_previous: CreateBookState, _formData: FormData) => result);
+  return vi.fn(async (_previous: BookFormState, _formData: FormData) => result);
 }
 
 describe("BookForm", () => {
@@ -20,6 +20,7 @@ describe("BookForm", () => {
 
     await userEvent.type(screen.getByLabelText("書名"), "リファクタリング");
     await userEvent.type(screen.getByLabelText("著者"), "Martin Fowler");
+    await userEvent.type(screen.getByLabelText("ISBN"), "9784274224546");
     await userEvent.type(screen.getByLabelText("総ページ数"), "480");
     await userEvent.selectOptions(screen.getByLabelText("状態"), "READING");
     await userEvent.click(screen.getByRole("button", { name: "登録する" }));
@@ -28,6 +29,7 @@ describe("BookForm", () => {
     const formData = action.mock.calls[0][1] as FormData;
     expect(formData.get("title")).toBe("リファクタリング");
     expect(formData.get("author")).toBe("Martin Fowler");
+    expect(formData.get("isbn")).toBe("9784274224546");
     expect(formData.get("totalPages")).toBe("480");
     expect(formData.get("status")).toBe("READING");
   });
@@ -61,7 +63,7 @@ describe("BookForm", () => {
 
   it("clears a previous error once a later submit succeeds", async () => {
     const action = vi
-      .fn<(previous: CreateBookState, formData: FormData) => Promise<CreateBookState>>()
+      .fn<(previous: BookFormState, formData: FormData) => Promise<BookFormState>>()
       .mockResolvedValueOnce({ status: "error", message: "title: title is required" })
       .mockResolvedValueOnce({ status: "success" });
     render(<BookForm action={action} />);
@@ -83,5 +85,42 @@ describe("BookForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "登録する" }));
 
     await waitFor(() => expect(action).toHaveBeenCalledOnce());
+  });
+
+  it("pre-fills every field from the book being edited", () => {
+    render(
+      <BookForm
+        action={stubAction({ status: "success" })}
+        initial={{
+          id: 7,
+          title: "リファクタリング",
+          author: "Martin Fowler",
+          isbn: "9784274224546",
+          totalPages: 480,
+          currentPage: 0,
+          status: "READING",
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("書名")).toHaveValue("リファクタリング");
+    expect(screen.getByLabelText("著者")).toHaveValue("Martin Fowler");
+    expect(screen.getByLabelText("ISBN")).toHaveValue("9784274224546");
+    expect(screen.getByLabelText("総ページ数")).toHaveValue(480);
+    expect(screen.getByLabelText("状態")).toHaveValue("READING");
+  });
+
+  it("uses the labels it is given, so the edit page does not say 登録", async () => {
+    render(
+      <BookForm
+        action={stubAction({ status: "success" })}
+        submitLabel="保存する"
+        successMessage="保存しました。"
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("保存しました。"));
   });
 });
