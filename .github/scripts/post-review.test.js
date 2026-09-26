@@ -9,6 +9,7 @@ const {
   inlineBody,
   summaryBody,
   countsLine,
+  droppedSection,
   parseRuleTitles,
   MAX_INLINE,
 } = require('./post-review.js');
@@ -261,4 +262,83 @@ test('countsLine: shows the merged count only when aggregation changed it', () =
     countsLine({ detectedCount: 7, verifiedCount: 5, posted: 5, inline: 5 }),
     '検出 7件 → 検証通過 5件（インライン 5件）',
   );
+});
+
+function dropped(overrides) {
+  return {
+    rule_id: 'TESTS',
+    file: FILE,
+    line: 41,
+    issue: 'no test for it',
+    reason: 'the current code is correct',
+    ...overrides,
+  };
+}
+
+test('droppedSection: nothing at all when the verifier dropped nothing', () => {
+  assert.deepEqual(droppedSection([]), []);
+});
+
+test('droppedSection: folded list with rule, location, issue and reason', () => {
+  const body = droppedSection([dropped()], parseRuleTitles('')).join('\n');
+  assert.match(body, /<details>\n<summary>検証で落とした指摘（1件）<\/summary>/);
+  assert.match(body, /`TESTS` テスト（ルール外の観点）　`backend\/src\/main\/java\/A\.java:41`/);
+  assert.match(body, /\*\*指摘\*\*：no test for it/);
+  assert.match(body, /\*\*落とした理由\*\*：the current code is correct/);
+  assert.ok(body.trimEnd().endsWith('</details>'));
+});
+
+test('droppedSection: long issues are cut and newlines cannot break the list', () => {
+  const body = droppedSection([
+    dropped({ issue: 'x'.repeat(500), reason: 'line one\n\n  line two' }),
+  ]).join('\n');
+  assert.match(body, new RegExp(`：${'x'.repeat(300)}…\n`));
+  assert.match(body, /落とした理由\*\*：line one line two$/m);
+});
+
+test('summaryBody: dropped findings come last, after the posted ones', () => {
+  const findings = [finding({ line: 99 })];
+  const parts = partition(findings, new Map([[FILE, parsePatch(PATCH)]]));
+  const body = summaryBody({
+    detectedCount: 2,
+    findings,
+    dropped: [dropped()],
+    parts,
+    rulesSha: 's',
+  });
+  assert.ok(body.indexOf('差分外の指摘') < body.indexOf('<details>'));
+});
+
+test('parseOutput: dropped is optional, but validated when present', () => {
+  const base = { detected_count: 1, verified_count: 0, failed_groups: 0, findings: [] };
+  assert.deepEqual(parseOutput(JSON.stringify(base)).dropped, []);
+  assert.deepEqual(parseOutput(JSON.stringify({ ...base, dropped: [dropped()] })).dropped, [dropped()]);
+  assert.throws(() => parseOutput(JSON.stringify({ ...base, dropped: {} })), /dropped が配列/);
+  assert.throws(
+    () => parseOutput(JSON.stringify({ ...base, dropped: [dropped({ reason: '' })] })),
+    /dropped\[0\]\.reason/,
+  );
+  assert.throws(
+    () => parseOutput(JSON.stringify({ ...base, dropped: [dropped({ line: 0 })] })),
+    /dropped\[0\]\.line/,
+  );
+});
+
+test('run: dropped findings go into the summary, never into inline comments', async () => {
+  const m = mocks([{ filename: FILE, patch: PATCH }]);
+  const structuredOutput = JSON.stringify({
+    detected_count: 2,
+    verified_count: 1,
+    failed_groups: 0,
+    dropped: [dropped({ line: 11 })],
+    findings: [finding({ line: 41 })],
+  });
+  await run({ ...m, structuredOutput, rulesSha: 'sha1' });
+  const review = m.calls.createReview[0];
+  assert.deepEqual(
+    review.comments.map((c) => c.line),
+    [41],
+  );
+  assert.match(review.body, /検証で落とした指摘（1件）/);
+  assert.match(review.body, /A\.java:11/);
 });

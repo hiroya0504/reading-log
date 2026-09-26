@@ -4,6 +4,7 @@
     "detected_count",
     "verified_count",
     "failed_groups",
+    "dropped",
     "findings"
   ],
   "properties": {
@@ -18,6 +19,37 @@
     "failed_groups": {
       "type": "integer",
       "minimum": 0
+    },
+    "dropped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "file",
+          "line",
+          "issue",
+          "reason"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "issue": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
     },
     "findings": {
       "type": "array",
