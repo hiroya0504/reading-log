@@ -2,11 +2,16 @@
   "type": "object",
   "required": [
     "detected_count",
+    "verified_count",
     "failed_groups",
     "findings"
   ],
   "properties": {
     "detected_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verified_count": {
       "type": "integer",
       "minimum": 0
     },
