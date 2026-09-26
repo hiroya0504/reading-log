@@ -111,6 +111,15 @@ test('parseRuleTitles: reads "## <RULE_ID> <title>" headings and labels perspect
   assert.equal(titles.get('TESTS'), 'テスト（ルール外の観点）');
 });
 
+test('parseRuleTitles: reads test rule headings the same way as rules.md', () => {
+  // post-review.js joins rules.md and test-rules.md before parsing.
+  const titles = parseRuleTitles(
+    ['## DEF-001 自己呼び出し', '# テストのルール定義', '## TEST-002 境界値の片側しか確かめていない'].join('\n'),
+  );
+  assert.equal(titles.get('DEF-001'), '自己呼び出し');
+  assert.equal(titles.get('TEST-002'), '境界値の片側しか確かめていない');
+});
+
 test('inlineBody: marker first, then severity and rule, issue and suggestion sections, footer', () => {
   const titles = new Map([['DEF-001', '自己呼び出し']]);
   const body = inlineBody(finding({ rule_id: 'DEF-001', severity: 'high' }), titles);

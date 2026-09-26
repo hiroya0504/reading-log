@@ -46,4 +46,4 @@
 | --- | --- | --- |
 | 規約準拠 | `review-detector-rules` | `rules.md` のルール ID（`DEF-001` など） |
 | セキュリティ | `review-detector-security` | `SECURITY` |
-| テスト | `review-detector-tests` | `TESTS` |
+| テスト | `review-detector-tests` | `test-rules.md` のルール ID（`TEST-001` など）。どれにも当たらないものは `TESTS` |

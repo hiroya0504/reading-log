@@ -12,7 +12,11 @@ const fs = require('node:fs');
 const MAX_INLINE = 5;
 const SEVERITY_ORDER = { high: 0, medium: 1 };
 const SEVERITY_LABEL = { high: '🔴 high', medium: '🟡 medium' };
-const RULES_PATH = '.claude/skills/ai-review/references/rules.md';
+// Rule definitions whose "## <RULE_ID> <title>" headings name the rules in comments.
+const RULES_PATHS = [
+  '.claude/skills/ai-review/references/rules.md',
+  '.claude/skills/ai-review/references/test-rules.md',
+];
 // Perspectives without rules.md entries: their findings carry the perspective ID instead.
 const PERSPECTIVE_TITLES = new Map([
   ['SECURITY', 'セキュリティ（ルール外の観点）'],
@@ -304,12 +308,16 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
   const commentableByFile = new Map(files.map((f) => [f.filename, parsePatch(f.patch)]));
 
   const parts = partition(data.findings, commentableByFile);
-  let titles = new Map(PERSPECTIVE_TITLES);
-  try {
-    titles = parseRuleTitles(fs.readFileSync(RULES_PATH, 'utf8'));
-  } catch (e) {
-    core.warning(`${RULES_PATH} を読めないため、ルール名を省略します: ${e.message}`);
+  // Read one by one so that a missing file only costs its own titles.
+  const markdowns = [];
+  for (const path of RULES_PATHS) {
+    try {
+      markdowns.push(fs.readFileSync(path, 'utf8'));
+    } catch (e) {
+      core.warning(`${path} を読めないため、そのルール名を省略します: ${e.message}`);
+    }
   }
+  const titles = parseRuleTitles(markdowns.join('\n'));
   const body = summaryBody({
     detectedCount: data.detected_count,
     verifiedCount: data.verified_count,
