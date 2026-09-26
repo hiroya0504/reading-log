@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const GET = vi.fn();
 const POST = vi.fn();
+const PUT = vi.fn();
+const DELETE = vi.fn();
 
 // `client.ts` is `server-only` and builds a real fetch client at import time, so the module is
 // replaced wholesale rather than mocked at the network layer.
 vi.mock("./client", () => ({
-  api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) },
+  api: {
+    GET: (...a: unknown[]) => GET(...a),
+    POST: (...a: unknown[]) => POST(...a),
+    PUT: (...a: unknown[]) => PUT(...a),
+    DELETE: (...a: unknown[]) => DELETE(...a),
+  },
 }));
 
-const { listBooks, createBook } = await import("./books");
+const { listBooks, createBook, getBook, updateBook, deleteBook } = await import("./books");
 
 const RAW = {
   id: 7,
@@ -42,6 +49,7 @@ describe("listBooks", () => {
           id: 7,
           title: "リファクタリング",
           author: null,
+          isbn: "9784274224546",
           totalPages: null,
           currentPage: 12,
           status: "READING",
@@ -174,6 +182,138 @@ describe("createBook", () => {
     expect(await createBook({ title: "t" })).toEqual({
       ok: false,
       message: "登録に失敗しました。",
+    });
+  });
+});
+
+describe("getBook", () => {
+  beforeEach(() => {
+    GET.mockReset();
+  });
+
+  it("asks for the book by id and returns it", async () => {
+    GET.mockResolvedValue({ data: RAW, response: new Response(null, { status: 200 }) });
+
+    const result = await getBook(7);
+
+    expect(GET).toHaveBeenCalledWith("/api/books/{id}", { params: { path: { id: 7 } } });
+    expect(result).toEqual({ ok: true, book: expect.objectContaining({ id: 7, isbn: RAW.isbn }) });
+  });
+
+  it("flags a 404 so the page can render not-found", async () => {
+    GET.mockResolvedValue({
+      error: { detail: "book 7 not found" },
+      response: new Response(null, { status: 404 }),
+    });
+
+    expect(await getBook(7)).toEqual({ ok: false, notFound: true, message: "book 7 not found" });
+  });
+
+  // Anything but 404 is an error to show, not a missing book: a 401 must not read as "no such book".
+  it("does not flag other failures as not-found", async () => {
+    GET.mockResolvedValue({ error: undefined, response: new Response(null, { status: 401 }) });
+
+    expect(await getBook(7)).toEqual({
+      ok: false,
+      notFound: false,
+      message: "本を取得できませんでした。",
+    });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    GET.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await getBook(7)).toEqual({
+      ok: false,
+      notFound: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+});
+
+describe("updateBook", () => {
+  beforeEach(() => {
+    PUT.mockReset();
+  });
+
+  it("sends the input to the book's path and returns the updated book", async () => {
+    PUT.mockResolvedValue({ data: RAW });
+
+    const input = { title: "リファクタリング", status: "READING" as const };
+    const result = await updateBook(7, input);
+
+    expect(PUT).toHaveBeenCalledWith("/api/books/{id}", {
+      params: { path: { id: 7 } },
+      body: input,
+    });
+    expect(result).toEqual({ ok: true, book: expect.objectContaining({ id: 7 }) });
+  });
+
+  it("builds the message from the field-level errors", async () => {
+    PUT.mockResolvedValue({
+      error: { errors: [{ field: "title", message: "title is required" }] },
+    });
+
+    expect(await updateBook(7, { title: "", status: "READING" })).toEqual({
+      ok: false,
+      message: "title: title is required",
+    });
+  });
+
+  it("reports a bodyless failure as a failed update", async () => {
+    PUT.mockResolvedValue({ error: undefined, data: undefined });
+
+    expect(await updateBook(7, { title: "t", status: "READING" })).toEqual({
+      ok: false,
+      message: "更新に失敗しました。",
+    });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    PUT.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await updateBook(7, { title: "t", status: "READING" })).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
+    });
+  });
+});
+
+describe("deleteBook", () => {
+  beforeEach(() => {
+    DELETE.mockReset();
+  });
+
+  it("succeeds on a 204", async () => {
+    DELETE.mockResolvedValue({ response: new Response(null, { status: 204 }) });
+
+    expect(await deleteBook(7)).toEqual({ ok: true });
+    expect(DELETE).toHaveBeenCalledWith("/api/books/{id}", { params: { path: { id: 7 } } });
+  });
+
+  // A 204 and Spring Security's bodyless 401 both leave `data` and `error` empty; only the status
+  // tells them apart.
+  it("does not read a bodyless 401 as a successful delete", async () => {
+    DELETE.mockResolvedValue({ error: undefined, response: new Response(null, { status: 401 }) });
+
+    expect(await deleteBook(7)).toEqual({ ok: false, message: "削除に失敗しました。" });
+  });
+
+  it("surfaces the backend's message", async () => {
+    DELETE.mockResolvedValue({
+      error: { detail: "book 7 not found" },
+      response: new Response(null, { status: 404 }),
+    });
+
+    expect(await deleteBook(7)).toEqual({ ok: false, message: "book 7 not found" });
+  });
+
+  it("reports a connection failure instead of throwing", async () => {
+    DELETE.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    expect(await deleteBook(7)).toEqual({
+      ok: false,
+      message: "バックエンドに接続できませんでした。",
     });
   });
 });

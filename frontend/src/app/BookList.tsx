@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Book, BookStatus } from "@/lib/api/books";
 
 const STATUS_LABELS: Record<BookStatus, string> = {
@@ -43,7 +44,9 @@ export function BookList({ books, error }: { books: Book[]; error?: string }) {
       {books.map((book) => (
         <li key={book.id} className="flex flex-col gap-1 rounded-md border p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="font-medium">{book.title}</span>
+            <Link href={`/books/${book.id}`} className="font-medium hover:underline">
+              {book.title}
+            </Link>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${STATUS_CLASSES[book.status]}`}
             >

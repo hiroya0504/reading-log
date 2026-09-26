@@ -14,6 +14,7 @@ export type Book = {
   id: number;
   title: string;
   author: string | null;
+  isbn: string | null;
   totalPages: number | null;
   currentPage: number;
   status: BookStatus;
@@ -22,9 +23,16 @@ export type Book = {
 export type BookInput = {
   title: string;
   author?: string;
+  isbn?: string;
   totalPages?: number;
   status?: BookStatus;
 };
+
+/**
+ * `PUT` replaces every editable field, so an omitted optional field is cleared rather than kept, and
+ * `status` is required — the backend does not default it on update.
+ */
+export type BookUpdateInput = BookInput & { status: BookStatus };
 
 export type CreateBookResult = { ok: true; book: Book } | { ok: false; message: string };
 
@@ -33,6 +41,7 @@ function toBook(raw: RawBook): Book {
     id: raw.id,
     title: raw.title,
     author: raw.author ?? null,
+    isbn: raw.isbn ?? null,
     totalPages: raw.totalPages ?? null,
     currentPage: raw.currentPage,
     status: raw.status,
@@ -112,6 +121,72 @@ export async function createBook(input: BookInput): Promise<CreateBookResult> {
     // A 4xx/5xx from the backend arrives as `error` above; this is the connection never being
     // made. openapi-fetch rethrows that, and with no error boundary in `app/` it would replace the
     // whole page — taking the form and everything the user typed with it.
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
+/**
+ * `notFound` is split out so the page can answer with Next.js's 404 rather than an error message:
+ * a missing book and another user's book both arrive here, and the backend deliberately does not
+ * tell them apart.
+ */
+export type GetBookResult =
+  { ok: true; book: Book } | { ok: false; notFound: boolean; message: string };
+
+export async function getBook(id: number): Promise<GetBookResult> {
+  try {
+    const { data, error, response } = await api.GET("/api/books/{id}", {
+      params: { path: { id } },
+    });
+    // Read before the guard: the contract declares no error responses, so `error` is typed `never`
+    // and TypeScript narrows `response` to `never` inside the failure branch as well.
+    const notFound = response.status === 404;
+    if (error || !data) {
+      return {
+        ok: false,
+        notFound,
+        message: problemMessage(error, "本を取得できませんでした。"),
+      };
+    }
+    return { ok: true, book: toBook(data) };
+  } catch {
+    return { ok: false, notFound: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
+export type UpdateBookResult = { ok: true; book: Book } | { ok: false; message: string };
+
+export async function updateBook(id: number, input: BookUpdateInput): Promise<UpdateBookResult> {
+  try {
+    const { data, error } = await api.PUT("/api/books/{id}", {
+      params: { path: { id } },
+      body: input,
+    });
+    if (error || !data) {
+      return { ok: false, message: problemMessage(error, "更新に失敗しました。") };
+    }
+    return { ok: true, book: toBook(data) };
+  } catch {
+    return { ok: false, message: "バックエンドに接続できませんでした。" };
+  }
+}
+
+export type DeleteBookResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Success is judged from the status, not from `data`: a 204 has no body, so `data` is empty on
+ * success and on a bodyless 401 alike.
+ */
+export async function deleteBook(id: number): Promise<DeleteBookResult> {
+  try {
+    const { error, response } = await api.DELETE("/api/books/{id}", {
+      params: { path: { id } },
+    });
+    if (error || !response.ok) {
+      return { ok: false, message: problemMessage(error, "削除に失敗しました。") };
+    }
+    return { ok: true };
+  } catch {
     return { ok: false, message: "バックエンドに接続できませんでした。" };
   }
 }
