@@ -128,8 +128,20 @@ function summaryLine(f, titles = new Map()) {
   ].join('\n');
 }
 
+/**
+ * "検出 7件 → 検証通過 7件（統合後 5件、インライン 5件）". The merged count is shown only when
+ * aggregation changed it, so a drop from 7 to 5 is not mistaken for the verifier rejecting two.
+ */
+function countsLine({ detectedCount, verifiedCount, posted, inline }) {
+  const verified = verifiedCount ?? posted;
+  const detail =
+    verified === posted ? `インライン ${inline}件` : `統合後 ${posted}件、インライン ${inline}件`;
+  return `検出 ${detectedCount}件 → 検証通過 ${verified}件（${detail}）`;
+}
+
 function summaryBody({
   detectedCount,
+  verifiedCount,
   failedGroups = 0,
   findings,
   parts,
@@ -140,7 +152,12 @@ function summaryBody({
     `<!-- ai-review:summary rules=${rulesSha} -->`,
     '## 🤖 AIレビュー',
     '',
-    `検出 ${detectedCount}件 → 検証通過 ${findings.length}件（インライン ${parts.inline.length}件）`,
+    countsLine({
+      detectedCount,
+      verifiedCount,
+      posted: findings.length,
+      inline: parts.inline.length,
+    }),
   ];
   if (failedGroups > 0) {
     // A failed detector group returns nothing, which would otherwise read as "no findings".
@@ -187,6 +204,9 @@ function parseOutput(raw) {
   }
   if (!Number.isInteger(data?.detected_count) || data.detected_count < 0) {
     throw new Error('detected_count が 0 以上の整数ではありません');
+  }
+  if (!Number.isInteger(data.verified_count) || data.verified_count < 0) {
+    throw new Error('verified_count が 0 以上の整数ではありません');
   }
   if (!Number.isInteger(data.failed_groups) || data.failed_groups < 0) {
     throw new Error('failed_groups が 0 以上の整数ではありません');
@@ -238,6 +258,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
   }
   const body = summaryBody({
     detectedCount: data.detected_count,
+    verifiedCount: data.verified_count,
     failedGroups: data.failed_groups,
     findings: data.findings,
     parts,
@@ -267,6 +288,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
       [
         { data: '検出', header: true },
         { data: '検証通過', header: true },
+        { data: '統合後', header: true },
         { data: 'インライン', header: true },
         { data: '差分外', header: true },
         { data: '上限超過', header: true },
@@ -274,6 +296,7 @@ async function run({ github, context, core, structuredOutput, rulesSha }) {
       ],
       [
         String(data.detected_count),
+        String(data.verified_count),
         String(data.findings.length),
         String(parts.inline.length),
         String(parts.outOfDiff.length),
@@ -299,5 +322,6 @@ module.exports = {
   parseOutput,
   inlineBody,
   summaryBody,
+  countsLine,
   MAX_INLINE,
 };

@@ -8,6 +8,7 @@ const {
   parseOutput,
   inlineBody,
   summaryBody,
+  countsLine,
   parseRuleTitles,
   MAX_INLINE,
 } = require('./post-review.js');
@@ -139,17 +140,21 @@ test('parseOutput: rejects empty, non-JSON and malformed findings', () => {
   assert.throws(() => parseOutput(''), /空/);
   assert.throws(() => parseOutput('not json'), /JSON/);
   assert.throws(() => parseOutput('{"findings":[]}'), /detected_count/);
-  assert.throws(() => parseOutput('{"detected_count":0,"findings":[]}'), /failed_groups/);
+  assert.throws(() => parseOutput('{"detected_count":0,"findings":[]}'), /verified_count/);
   assert.throws(
-    () => parseOutput(JSON.stringify({ detected_count: 1, failed_groups: 0, findings: [finding({ line: 0 })] })),
+    () => parseOutput('{"detected_count":0,"verified_count":0,"findings":[]}'),
+    /failed_groups/,
+  );
+  assert.throws(
+    () => parseOutput(JSON.stringify({ detected_count: 1, verified_count: 1, failed_groups: 0, findings: [finding({ line: 0 })] })),
     /line/,
   );
   assert.throws(
     () =>
-      parseOutput(JSON.stringify({ detected_count: 1, failed_groups: 0, findings: [finding({ severity: 'low' })] })),
+      parseOutput(JSON.stringify({ detected_count: 1, verified_count: 1, failed_groups: 0, findings: [finding({ severity: 'low' })] })),
     /severity/,
   );
-  assert.deepEqual(parseOutput('{"detected_count":0,"failed_groups":0,"findings":[]}').findings, []);
+  assert.deepEqual(parseOutput('{"detected_count":0,"verified_count":0,"failed_groups":0,"findings":[]}').findings, []);
 });
 
 function mocks(files) {
@@ -193,6 +198,7 @@ test('run: posts exactly one review with inline comments and summary', async () 
   const m = mocks([{ filename: FILE, patch: PATCH }]);
   const structuredOutput = JSON.stringify({
     detected_count: 3,
+    verified_count: 2,
     failed_groups: 0,
     findings: [finding({ line: 41, severity: 'high' }), finding({ line: 99 })],
   });
@@ -229,6 +235,7 @@ test('run: failed groups still post the review, then fail the step', async () =>
   const m = mocks([{ filename: FILE, patch: PATCH }]);
   const structuredOutput = JSON.stringify({
     detected_count: 1,
+    verified_count: 1,
     failed_groups: 2,
     findings: [finding({ line: 41 })],
   });
@@ -243,4 +250,15 @@ test('inlineBody: perspective findings show the perspective label', () => {
   const body = inlineBody(finding({ rule_id: 'SECURITY', severity: 'high' }), titles);
   assert.equal(body.split('\n')[0], '<!-- ai-review:rule=SECURITY -->');
   assert.match(body, /\*\*ルール\*\*：`SECURITY` セキュリティ（ルール外の観点）/);
+});
+
+test('countsLine: shows the merged count only when aggregation changed it', () => {
+  assert.equal(
+    countsLine({ detectedCount: 7, verifiedCount: 7, posted: 5, inline: 5 }),
+    '検出 7件 → 検証通過 7件（統合後 5件、インライン 5件）',
+  );
+  assert.equal(
+    countsLine({ detectedCount: 7, verifiedCount: 5, posted: 5, inline: 5 }),
+    '検出 7件 → 検証通過 5件（インライン 5件）',
+  );
 });
