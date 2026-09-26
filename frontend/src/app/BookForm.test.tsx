@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { BookForm } from "./BookForm";
+import { BookForm, type BookFormAction } from "./BookForm";
 import type { BookFormState } from "./book-form-state";
 
 /**
@@ -9,8 +9,8 @@ import type { BookFormState } from "./book-form-state";
  * action as a prop instead of importing it.
  */
 function stubAction(result: BookFormState) {
-  // Parameters are declared so the recorded call is typed and `calls[0][1]` is the FormData.
-  return vi.fn(async (_previous: BookFormState, _formData: FormData) => result);
+  // Typed through the generic so the recorded call is typed and `calls[0][1]` is the FormData.
+  return vi.fn<BookFormAction>(async () => result);
 }
 
 describe("BookForm", () => {
