@@ -28,6 +28,7 @@ type ParsedBookForm =
         isbn?: string;
         totalPages?: number;
         status?: BookStatus;
+        coverUrl?: string;
       };
     }
   | { ok: false; message: string };
@@ -59,6 +60,7 @@ function parseBookForm(formData: FormData): ParsedBookForm {
       isbn: optionalText(formData.get("isbn")),
       totalPages,
       status,
+      coverUrl: optionalText(formData.get("coverUrl")),
     },
   };
 }
@@ -158,13 +160,14 @@ export async function updateStatusAction(
   if (!current.ok) {
     return { status: "error", message: current.message };
   }
-  const { title, author, isbn, totalPages } = current.book;
+  const { title, author, isbn, totalPages, coverUrl } = current.book;
   const result = await updateBook(id, {
     title,
     author: author ?? undefined,
     isbn: isbn ?? undefined,
     totalPages: totalPages ?? undefined,
     status: raw as BookStatus,
+    coverUrl: coverUrl ?? undefined,
   });
   if (!result.ok) {
     return { status: "error", message: result.message };

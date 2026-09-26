@@ -87,6 +87,28 @@ describe("BookForm", () => {
     await waitFor(() => expect(action).toHaveBeenCalledOnce());
   });
 
+  // PUT replaces every field, so a cover the form did not send would be removed on save.
+  it("sends the cover it started from along with the fields", async () => {
+    const action = stubAction({ status: "success" });
+    render(
+      <BookForm
+        action={action}
+        initial={{
+          title: "t",
+          author: null,
+          isbn: null,
+          totalPages: null,
+          coverUrl: "https://books.google.com/t",
+        }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "登録する" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledOnce());
+    expect(action.mock.calls[0][1].get("coverUrl")).toBe("https://books.google.com/t");
+  });
+
   it("offers the statuses by their Japanese names, in reading order", () => {
     render(<BookForm action={stubAction({ status: "idle" })} />);
 
@@ -99,13 +121,12 @@ describe("BookForm", () => {
       <BookForm
         action={stubAction({ status: "success" })}
         initial={{
-          id: 7,
           title: "リファクタリング",
           author: "Martin Fowler",
           isbn: "9784274224546",
           totalPages: 480,
-          currentPage: 0,
           status: "READING",
+          coverUrl: null,
         }}
       />,
     );

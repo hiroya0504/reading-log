@@ -61,6 +61,7 @@ describe("listBooks", () => {
           totalPages: null,
           currentPage: 12,
           status: "READING",
+          coverUrl: null,
         },
       ],
       total: 1,

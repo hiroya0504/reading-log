@@ -90,6 +90,19 @@ describe("createBookAction", () => {
     });
   });
 
+  it("sends the cover chosen from the search", async () => {
+    await expect(
+      createBookAction(
+        initialBookFormState,
+        formData({ title: "t", coverUrl: "https://books.google.com/t" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(POST).toHaveBeenCalledWith("/api/books", {
+      body: expect.objectContaining({ coverUrl: "https://books.google.com/t" }),
+    });
+  });
+
   it("omits blank optional fields instead of sending empty strings", async () => {
     await expect(
       createBookAction(
@@ -256,6 +269,7 @@ describe("updateStatusAction", () => {
         author: "Martin Fowler",
         isbn: "978",
         totalPages: 480,
+        coverUrl: "https://books.google.com/t",
       },
       response: { status: 200 },
     });
@@ -271,6 +285,7 @@ describe("updateStatusAction", () => {
         isbn: "978",
         totalPages: 480,
         status: "DONE",
+        coverUrl: "https://books.google.com/t",
       },
     });
   });
