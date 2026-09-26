@@ -8,10 +8,11 @@
 
 | 観点 | 担当 |
 | --- | --- |
-| フォーマット（インデント、改行、import 順、未使用 import） | Spotless（`make lint-backend`） |
+| フォーマット（インデント、改行、import 順、未使用 import） | Spotless（`make lint-backend`）、Prettier と ESLint（`make lint-frontend`） |
 | 命名 | 人間のレビュー。`backend/CLAUDE.md` の命名規約 |
 | レイヤ依存（Controller → Service → Mapper の方向、acting user の渡し方） | 人間のレビュー。ArchUnit は MVP 期間中は導入しない（`CLAUDE.md`） |
-| テストの成否、カバレッジの数値 | `make test-backend`（CI の static-checks ジョブ） |
+| 型の誤り（frontend） | `tsc`（`make lint-frontend`） |
+| テストの成否、カバレッジの数値 | `make test-backend` / `make test-frontend`（CI の static-checks ジョブ） |
 | API 契約と `docs/openapi.json` のずれ | `OpenApiSnapshotTest` |
 | パフォーマンス | MVP 期間中はやらない（`CLAUDE.md`） |
 
@@ -31,7 +32,7 @@
 1. **どの行か**: 差分で追加・変更された、特定の行。
 2. **どう変わるか**: その行への、ありそうな 1 か所の編集（条件を消す、列を足す・消す、アノテーションを外す、など）。
 3. **何が壊れるか**: その編集で変わる振る舞い。**差分のコード・javadoc・API 契約が約束している振る舞い**に限る。
-4. **なぜ気づけないか**: その編集をしても、どのテストも落ちないこと。`backend/src/test/` を Grep して示す。
+4. **なぜ気づけないか**: その編集をしても、どのテストも落ちないこと。`backend/src/test/`（frontend なら `frontend/src/` の `*.test.ts` / `*.test.tsx`）を Grep して示す。
 
 - **「今の実装は正しい」は、テストの観点では指摘を落とす理由にならない。**
 - 次のものは出さない（検証役は DROP にする）。
