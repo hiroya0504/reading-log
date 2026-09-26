@@ -72,8 +72,12 @@ com.example.readinglog/
 
 ## テスト
 
+**古典派（Khorikov）で書く。ルールは `.claude/skills/ai-review/references/test-rules.md`**（AI レビューの判定基準を兼ねる）。
+テストを書く・直すときは必ず読む。要点: 振る舞いの単位でテストする、自前の DB や Bean をモックにしない、
+境界値は両側、書き込みはレスポンスと読み直しの両方、テストに分岐を書かない。
+
 - `@SpringBootTest` + Testcontainers（実 PostgreSQL）。
-- Controller スライスは `@WebMvcTest`、Mapper スライスは `@MybatisTest`。
+- `@WebMvcTest` は Service をモックにする前提なので使わない（TEST-006）。Mapper だけを確かめたいときは `@MybatisTest`（実 DB）。
 - 命名は全部 `*Test`（`*IT` は使わない）。アサーションは AssertJ。
 
 ## 静的解析

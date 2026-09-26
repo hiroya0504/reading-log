@@ -19,7 +19,8 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 参照ファイル（パスはリポジトリルートから）:
 
 - 共通の前提: `.claude/skills/ai-review/references/common.md`（すべての検出役と検証役が読む）
-- ルール定義: `.claude/skills/ai-review/references/rules.md`（規約準拠の検出役と、ルール ID の指摘の検証役だけが読む）
+- ルール定義: `.claude/skills/ai-review/references/rules.md`（規約準拠の検出役と、`DEF-` / `SEC-` などのルール ID の指摘の検証役だけが読む）
+- テストのルール定義: `.claude/skills/ai-review/references/test-rules.md`（テストの検出役と、`TEST-` で始まるルール ID の指摘の検証役だけが読む）
 
 仕組みと運用は `docs/ai-review.md`。
 
@@ -29,7 +30,7 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 | --- | --- | --- | --- |
 | 規約準拠 | `review-detector-rules` | 本体 | `rules.md` のルール ID |
 | セキュリティ | `review-detector-security` | 本体 | `SECURITY` |
-| テスト | `review-detector-tests` | 本体とテスト | `TESTS` |
+| テスト | `review-detector-tests` | 本体とテスト | `test-rules.md` のルール ID。どれにも当たらないものは `TESTS` |
 
 ## モード
 
@@ -68,7 +69,7 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 - 差分の取得方法（CIなら `gh pr diff <PR NUMBER>`、ローカルなら `git diff origin/main...HEAD` と `git diff`）
 - 共通の前提のパス
 - 規約準拠のみ: ルール定義のパス
-- テストのみ: ベースブランチ（CIなら `origin/<BASE REF>`、ローカルなら `origin/main`）
+- テストのみ: ベースブランチ（CIなら `origin/<BASE REF>`、ローカルなら `origin/main`）と、テストのルール定義のパス
 
 各エージェントが返したJSONの `findings` をすべて集める。
 
@@ -90,7 +91,7 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 
 - 指摘のJSON1件
 - 共通の前提のパス
-- `rule_id` がルール ID（`SECURITY` / `TESTS` 以外）のときだけ: ルール定義のパス
+- `rule_id` がルール ID（`SECURITY` / `TESTS` 以外）のときだけ: ルール定義のパス。`TEST-` で始まるならテストのルール定義、それ以外なら `rules.md`
 検証役に先入観を持たせないため。
 
 応答の1行目が、前後の空白を除いて `VERDICT: KEEP` と完全に一致するものだけを残す。

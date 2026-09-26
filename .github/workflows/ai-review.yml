@@ -172,11 +172,11 @@ jobs:
 
       # 投稿スクリプトと、コメントに載せるルール名の出どころもベースブランチの内容を使う
       # （理由は ai-review ジョブと同じ）。
-      - name: Use post-review.js and rules.md from the base branch
+      - name: Use post-review.js and the rule definitions from the base branch
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          for path in .github/scripts/post-review.js .claude/skills/ai-review/references/rules.md; do
+          for path in .github/scripts/post-review.js .claude/skills/ai-review/references/rules.md .claude/skills/ai-review/references/test-rules.md; do
             if git cat-file -e "origin/${BASE_REF}:${path}" 2>/dev/null; then
               git checkout "origin/${BASE_REF}" -- "${path}"
             else
