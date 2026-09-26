@@ -22,6 +22,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/books/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the authenticated user's books by title. */
+        get: operations["searchBooks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -194,6 +211,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BookResponse"];
+                };
+            };
+        };
+    };
+    searchBooks: {
+        parameters: {
+            query: {
+                /** @description タイトルに含まれる文字列。 */
+                q: string;
+                /** @description 並び順。 */
+                sort?: "NEWEST" | "TITLE";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BookListResponse"];
                 };
             };
         };

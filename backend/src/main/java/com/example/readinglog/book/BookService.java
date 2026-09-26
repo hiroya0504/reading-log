@@ -4,6 +4,8 @@ import com.example.readinglog.book.dto.BookCreateRequest;
 import com.example.readinglog.common.error.ValidationException;
 import com.example.readinglog.common.security.CurrentUser;
 import java.util.List;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,5 +57,36 @@ public class BookService {
         request.isbn(),
         request.totalPages(),
         request.statusOrDefault());
+  }
+
+  @Transactional(readOnly = true)
+  public List<Book> search(String keyword, BookSort sort) {
+    try {
+      return bookMapper.search(
+          currentUser.requireUserId().value(), keyword, sort.orderBy(), MAX_LIMIT);
+    } catch (DataAccessException e) {
+      return List.of();
+    }
+  }
+
+  /** Returns the user's book with the same ISBN if there is one; registers it otherwise. */
+  @Transactional(readOnly = true)
+  public Book registerIfAbsent(BookCreateRequest request) {
+    long userId = currentUser.requireUserId().value();
+    Book existing = bookMapper.findByIsbn(userId, request.isbn());
+    if (existing != null) {
+      return existing;
+    }
+    try {
+      return create(request);
+    } catch (DuplicateKeyException e) {
+      // 同じ ISBN が同時に登録された場合は、先に登録された行を返す
+      return bookMapper.findByIsbn(userId, request.isbn());
+    }
+  }
+
+  @Transactional
+  public List<Book> createAll(List<BookCreateRequest> requests) {
+    return requests.stream().map(this::create).toList();
   }
 }

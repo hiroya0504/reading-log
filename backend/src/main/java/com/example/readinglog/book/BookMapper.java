@@ -55,4 +55,30 @@ public interface BookMapper {
       @Param("isbn") String isbn,
       @Param("totalPages") Integer totalPages,
       @Param("status") BookStatus status);
+
+  @Select(
+      """
+      SELECT id, user_id, title, author, isbn, total_pages, current_page,
+             status, rating, note, created_at, updated_at
+        FROM books
+       WHERE user_id = #{userId}
+         AND title LIKE '%${keyword}%'
+       ORDER BY ${orderBy}
+       LIMIT #{limit}
+      """)
+  List<Book> search(
+      @Param("userId") long userId,
+      @Param("keyword") String keyword,
+      @Param("orderBy") String orderBy,
+      @Param("limit") int limit);
+
+  @Select(
+      """
+      SELECT id, user_id, title, author, isbn, total_pages, current_page,
+             status, rating, note, created_at, updated_at
+        FROM books
+       WHERE user_id = #{userId} AND isbn = #{isbn}
+       LIMIT 1
+      """)
+  Book findByIsbn(@Param("userId") long userId, @Param("isbn") String isbn);
 }

@@ -237,6 +237,52 @@
         ]
       }
     },
+    "/api/books/search" : {
+      "get" : {
+        "operationId" : "searchBooks",
+        "parameters" : [
+          {
+            "description" : "タイトルに含まれる文字列。",
+            "in" : "query",
+            "name" : "q",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "description" : "並び順。",
+            "in" : "query",
+            "name" : "sort",
+            "required" : false,
+            "schema" : {
+              "default" : "NEWEST",
+              "enum" : [
+                "NEWEST",
+                "TITLE"
+              ],
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Search the authenticated user's books by title.",
+        "tags" : [
+          "book"
+        ]
+      }
+    },
     "/api/health" : {
       "get" : {
         "operationId" : "health",

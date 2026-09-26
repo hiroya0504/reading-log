@@ -52,6 +52,18 @@ public class BookController {
     return new BookListResponse(items);
   }
 
+  @Operation(
+      operationId = "searchBooks",
+      summary = "Search the authenticated user's books by title.")
+  @GetMapping("/books/search")
+  public BookListResponse search(
+      @Parameter(description = "タイトルに含まれる文字列。") @RequestParam String q,
+      @Parameter(description = "並び順。") @RequestParam(defaultValue = "NEWEST") BookSort sort) {
+    List<BookResponse> items =
+        bookService.search(q, sort).stream().map(BookResponse::from).toList();
+    return new BookListResponse(items);
+  }
+
   // No Location header: it would have to point at GET /api/books/{id}, which this slice does not
   // expose. A Location that 404s is worse than none; it arrives with the read-by-id endpoint.
   @Operation(operationId = "createBook", summary = "Register a book for the authenticated user.")
