@@ -24,7 +24,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-# Rule IDs (DEF-001) for the rules perspective, perspective IDs (SECURITY, TESTS) for the others.
+# Rule IDs (DEF-001) for the rules perspective, perspective IDs (SECURITY, BUGS, HOLLOW) for the others.
+# TESTS is the retired test perspective (until 2026-09-27); old threads still count under it.
 MARKER = re.compile(r"<!--\s*ai-review:rule=([A-Z]+(?:-\d+)?)\s*-->")
 
 QUERY = """

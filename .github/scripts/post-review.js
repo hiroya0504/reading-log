@@ -20,7 +20,8 @@ const RULES_PATHS = [
 // Perspectives without rules.md entries: their findings carry the perspective ID instead.
 const PERSPECTIVE_TITLES = new Map([
   ['SECURITY', 'セキュリティ（ルール外の観点）'],
-  ['TESTS', 'テスト（ルール外の観点）'],
+  ['BUGS', 'バグ（ルール外の観点）'],
+  ['HOLLOW', 'テストの骨抜き（ルール外の観点）'],
 ]);
 const FOOTER = '🤖 AIレビュー　👍 対応した ／ 👎 誤り ／ 😕 正しいが不要';
 // Detector text is long; a dropped entry only needs enough to recognise the finding.

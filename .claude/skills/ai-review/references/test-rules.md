@@ -3,7 +3,8 @@
 backend と frontend のテストの書き方の規約。2 つの役割を兼ねる。
 
 - **書く側の規約**: テストを書くときは、このファイルに従う（`backend/CLAUDE.md` と `frontend/CLAUDE.md` から参照している）。
-- **AI レビューの判定基準**: テストの観点の検出役（`review-detector-tests`）と、`TEST-` で始まるルール ID の指摘を照合する検証役（`review-verifier`）が読む。
+- **AI レビューの判定基準**: 規約準拠の検出役（`review-detector-rules`）と、`TEST-` で始まるルール ID の指摘を照合する検証役（`review-verifier`）が読む。
+  テストの骨抜きの検出役（`review-detector-hollow-tests`）とバグの検出役は、ここに当てはまるものを**出さない**ための除外の判断にだけ使う。
 
 「対象外」と共通の原則は `common.md` にある。そちらも必ず読む。
 
@@ -60,7 +61,7 @@ frontend（Vitest + Testing Library）でも同じ考え方で、「アプリの
 ## ルールの形
 
 各ルールの「指摘すること」「指摘しないこと」は、検出役と検証役がそのまま照合に使う。
-**指摘の位置（`file` / `line`）** は `review-detector-tests.md` の表に従う。確かめられていない振る舞いを指摘するルール（TEST-001〜005）は本体のコードの行、テストの書き方を指摘するルール（TEST-006〜009）はテストコードの行。
+**指摘の位置（`file` / `line`）** は `review-detector-rules.md` の表に従う。確かめられていない振る舞いを指摘するルール（TEST-001〜005）は本体のコードの行、テストの書き方を指摘するルール（TEST-006〜009）はテストコードの行。
 各ルールの「適用」に、backend と frontend のどちらに当てはめるかを書いている。当てはまらない側の差分には出さない。
 
 ---

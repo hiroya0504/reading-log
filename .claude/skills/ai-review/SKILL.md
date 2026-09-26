@@ -1,6 +1,6 @@
 ---
 name: ai-review
-description: 変更差分を、規約準拠・セキュリティ・テストの 3 観点の「検出→検証」の2段構成でレビューする。「レビューして」「PR出す前に見て」「/ai-review」と言われたとき、またはCIから呼ばれたときに使う。
+description: 変更差分を、規約準拠・セキュリティ・バグ・テストの骨抜きの 4 観点の「検出→検証」の2段構成でレビューする。「レビューして」「PR出す前に見て」「/ai-review」と言われたとき、またはCIから呼ばれたときに使う。
 ---
 
 # AIレビュー（検出→検証の2段構成）
@@ -19,8 +19,8 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 参照ファイル（パスはリポジトリルートから）:
 
 - 共通の前提: `.claude/skills/ai-review/references/common.md`（すべての検出役と検証役が読む）
-- ルール定義: `.claude/skills/ai-review/references/rules.md`（規約準拠の検出役と、`DEF-` / `SEC-` などのルール ID の指摘の検証役だけが読む）
-- テストのルール定義: `.claude/skills/ai-review/references/test-rules.md`（テストの検出役と、`TEST-` で始まるルール ID の指摘の検証役だけが読む）
+- ルール定義: `.claude/skills/ai-review/references/rules.md`（規約準拠の検出役と、`DEF-` / `SEC-` などのルール ID の指摘の検証役が読む。バグの検出役も除外の判断に使う）
+- テストのルール定義: `.claude/skills/ai-review/references/test-rules.md`（規約準拠の検出役と、`TEST-` で始まるルール ID の指摘の検証役が読む。テストの骨抜きの検出役も除外の判断に使う）
 
 仕組みと運用は `docs/ai-review.md`。
 
@@ -28,9 +28,10 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 
 | 観点 | 検出役（`subagent_type`） | 対象ファイル | 指摘の `rule_id` |
 | --- | --- | --- | --- |
-| 規約準拠 | `review-detector-rules` | 本体 | `rules.md` のルール ID |
-| セキュリティ | `review-detector-security` | 本体 | `SECURITY` |
-| テスト | `review-detector-tests` | 本体とテスト（backend と frontend） | `test-rules.md` のルール ID。どれにも当たらないものは `TESTS` |
+| 規約準拠 | `review-detector-rules` | 本体とテスト（backend と frontend） | `rules.md` と `test-rules.md` のルール ID |
+| セキュリティ | `review-detector-security` | 本体（backend だけ） | `SECURITY` |
+| バグ | `review-detector-bugs` | 本体（backend と frontend） | `BUGS` |
+| テストの骨抜き | `review-detector-hollow-tests` | 本体とテスト（backend と frontend） | `HOLLOW` |
 
 ## モード
 
@@ -57,10 +58,11 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 
 ### 2. 検出
 
-3 つの観点の検出役を、**すべて 1 つのメッセージで並列に**呼ぶ（Agent ツール。どれも `run_in_background: false`）。
+4 つの観点の検出役を、**すべて 1 つのメッセージで並列に**呼ぶ（Agent ツール。どれも `run_in_background: false`）。
 
-- 規約準拠とセキュリティ: 対象は**本体**（backend だけ）。本体が 0 件なら呼ばない
-- テスト: 対象は**本体・テスト・frontend の本体・frontend のテスト**。4 つとも 0 件なら呼ばない
+- セキュリティ: 対象は**本体**（backend だけ）。0 件なら呼ばない
+- バグ: 対象は**本体・frontend の本体**。2 つとも 0 件なら呼ばない
+- 規約準拠とテストの骨抜き: 対象は**本体・テスト・frontend の本体・frontend のテスト**。4 つとも 0 件なら呼ばない
 - 対象ファイルが 8 個を超える観点は、ファイルを 8 個以下のグループに分けて、グループごとに 1 体呼ぶ
 
 以下、「観点 × グループ」の 1 回の呼び出しを **検出グループ** と呼ぶ。
@@ -70,8 +72,9 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 - 対象ファイル一覧
 - 差分の取得方法（CIなら `gh pr diff <PR NUMBER>`、ローカルなら `git diff origin/main...HEAD` と `git diff`）
 - 共通の前提のパス
-- 規約準拠のみ: ルール定義のパス
-- テストのみ: ベースブランチ（CIなら `origin/<BASE REF>`、ローカルなら `origin/main`）と、テストのルール定義のパス
+- 規約準拠: ベースブランチ（CIなら `origin/<BASE REF>`、ローカルなら `origin/main`）と、ルール定義とテストのルール定義の両方のパス
+- バグ: ルール定義のパス
+- テストの骨抜き: ベースブランチと、テストのルール定義のパス
 
 各エージェントが返したJSONの `findings` をすべて集める。
 
@@ -93,7 +96,7 @@ description: 変更差分を、規約準拠・セキュリティ・テストの 
 
 - 指摘のJSON1件
 - 共通の前提のパス
-- `rule_id` がルール ID（`SECURITY` / `TESTS` 以外）のときだけ: ルール定義のパス。`TEST-` で始まるならテストのルール定義、それ以外なら `rules.md`
+- `rule_id` がルール ID（`SECURITY` / `BUGS` / `HOLLOW` 以外）のときだけ: ルール定義のパス。`TEST-` で始まるならテストのルール定義、それ以外なら `rules.md`
 検証役に先入観を持たせないため。
 
 応答の1行目が、前後の空白を除いて `VERDICT: KEEP` と完全に一致するものだけを残す。
@@ -113,7 +116,7 @@ DROP にした指摘は捨てずに、**落とした指摘**（`dropped`）と�
 ### 4. 集約
 
 - **観点をまたいだ指摘は統合しない。** 同じファイルの同じ行でも、`rule_id` が違えば別の指摘として残す。
-  観点が違えば、同じ行でも中身は別の問題であることが多い（例: セキュリティの「ハッシュの露出」と、テストの「そのエンドポイントのテストが無い」）。
+  観点が違えば、同じ行でも中身は別の問題であることが多い（例: セキュリティの「ハッシュの露出」と、`TEST-001` の「そのエンドポイントのテストが無い」）。
 - 同じ `rule_id` で同じファイルの指摘が複数あれば、行番号が最も小さいものを代表の1件にし、他の該当行を `issue` の末尾に「同様の箇所: 58行目、73行目」のように追記する。
 - 重要度順（high → medium）に並べる。同じ重要度の中では、ファイルパス、行番号の順。
 - 件数の上限による絞り込みはしない（CIではワークフロー側で行う）。
@@ -132,11 +135,11 @@ PRへの投稿や `gh` によるコメントは**行わない**。次の形のJS
   "failed_groups": 0,
   "dropped": [
     {
-      "rule_id": "TESTS",
-      "file": "backend/src/main/java/com/example/readinglog/book/BookController.java",
+      "rule_id": "HOLLOW",
+      "file": "backend/src/test/java/com/example/readinglog/book/BookApiTest.java",
       "line": 74,
-      "issue": "数値でない id を渡したときの振る舞いを確かめるテストが無い。",
-      "reason": "今の実装は標準のハンドラで 400 を返しており、退行が見逃される経路を示せない。"
+      "issue": "【意味のない通るテスト】ステータスしか見ておらず、本体を見ていない。",
+      "reason": "同じ振る舞いを progressRecordsThePage が本体まで確かめている。"
     }
   ],
   "findings": [
