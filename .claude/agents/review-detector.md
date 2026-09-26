@@ -2,7 +2,7 @@
 name: review-detector
 description: AIレビューの検出役。ルール定義に照らして、変更差分からルール違反の候補を JSON で返す。ai-review スキルから呼ばれる。単体では使わない。
 tools: Read, Grep, Glob, Bash
-model: claude-sonnet-5
+model: claude-opus-5-5
 ---
 
 <!--
