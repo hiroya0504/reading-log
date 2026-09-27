@@ -1,6 +1,39 @@
 {
   "components" : {
     "schemas" : {
+      "BookCandidateResponse" : {
+        "properties" : {
+          "author" : {
+            "description" : "著者名。複数なら「, 」区切り。不明なら null。",
+            "example" : "Martin Fowler",
+            "type" : "string"
+          },
+          "coverUrl" : {
+            "description" : "表紙の画像の URL（https）。無ければ null。",
+            "type" : "string"
+          },
+          "isbn" : {
+            "description" : "ISBN。13 桁を優先。不明なら null。",
+            "example" : "9784274224546",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "書名。",
+            "example" : "リファクタリング",
+            "type" : "string"
+          },
+          "totalPages" : {
+            "description" : "総ページ数。不明なら null。",
+            "example" : 480,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [
+          "title"
+        ],
+        "type" : "object"
+      },
       "BookCreateRequest" : {
         "properties" : {
           "author" : {
@@ -8,6 +41,14 @@
             "example" : "山田太郎",
             "maxLength" : 255,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "coverUrl" : {
+            "description" : "表紙の画像の URL。本の検索（GET /api/book-search）の coverUrl をそのまま渡す。",
+            "example" : "https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "pattern" : "^https://(books\\.google\\.com|books\\.googleusercontent\\.com)/.*$",
             "type" : "string"
           },
           "isbn" : {
@@ -88,6 +129,10 @@
             "example" : "山田太郎",
             "type" : "string"
           },
+          "coverUrl" : {
+            "description" : "表紙の画像の URL。未設定なら null。",
+            "type" : "string"
+          },
           "createdAt" : {
             "description" : "登録日時。",
             "format" : "date-time",
@@ -156,6 +201,21 @@
         ],
         "type" : "object"
       },
+      "BookSearchResponse" : {
+        "properties" : {
+          "items" : {
+            "description" : "見つかった本。関連の高い順。",
+            "items" : {
+              "$ref" : "#/components/schemas/BookCandidateResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [
+          "items"
+        ],
+        "type" : "object"
+      },
       "BookStatusCountsResponse" : {
         "properties" : {
           "done" : {
@@ -191,6 +251,14 @@
             "example" : "山田太郎",
             "maxLength" : 255,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "coverUrl" : {
+            "description" : "表紙の画像の URL。本の検索（GET /api/book-search）の coverUrl をそのまま渡す。省略すると消える。",
+            "example" : "https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1",
+            "maxLength" : 500,
+            "minLength" : 0,
+            "pattern" : "^https://(books\\.google\\.com|books\\.googleusercontent\\.com)/.*$",
             "type" : "string"
           },
           "isbn" : {
@@ -254,6 +322,38 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/book-search" : {
+      "get" : {
+        "operationId" : "searchBooks",
+        "parameters" : [
+          {
+            "description" : "書名・著者・ISBN など。1〜200 文字。",
+            "in" : "query",
+            "name" : "q",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookSearchResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Search the external catalog for books to register. Nothing is stored.",
+        "tags" : [
+          "book-search"
+        ]
+      }
+    },
     "/api/books" : {
       "get" : {
         "operationId" : "listBooks",

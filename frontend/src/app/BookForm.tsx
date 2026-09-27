@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import type { Book } from "@/lib/api/books";
+import type { BookStatus } from "@/lib/api/books";
 import { initialBookFormState, type BookFormState } from "./book-form-state";
 import { STATUS_FLOW, STATUS_LABELS } from "./ui/status";
 import { buttonPrimary, card, fieldInput, fieldLabel } from "./ui/styles";
@@ -11,10 +11,23 @@ export type BookFormAction = (
   formData: FormData,
 ) => Promise<BookFormState>;
 
+/**
+ * What the form starts from: a book being edited, or a search candidate being registered. A
+ * `Book` fits as is.
+ */
+export type BookFormValues = {
+  title: string;
+  author: string | null;
+  isbn: string | null;
+  totalPages: number | null;
+  status?: BookStatus;
+  coverUrl: string | null;
+};
+
 type Props = {
   action: BookFormAction;
   /** Pre-fills the fields for editing. Omitted when registering a new book. */
-  initial?: Book;
+  initial?: BookFormValues;
   submitLabel?: string;
   pendingLabel?: string;
   successMessage?: string;
@@ -41,6 +54,9 @@ export function BookForm({
 
   return (
     <form action={formAction} className={`${card} flex flex-col gap-5 p-6 sm:p-8`}>
+      {/* Not editable here: it comes from the search, and PUT would clear it if left out. */}
+      <input type="hidden" name="coverUrl" defaultValue={initial?.coverUrl ?? ""} />
+
       <label className={fieldLabel}>
         書名
         <input

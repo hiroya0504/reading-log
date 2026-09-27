@@ -3,6 +3,7 @@ package com.example.readinglog.book.dto;
 import com.example.readinglog.book.BookStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -27,7 +28,14 @@ public record BookCreateRequest(
     @Schema(description = "総ページ数。1 以上。", example = "320")
         @Positive(message = "totalPages must be positive")
         Integer totalPages,
-    @Schema(description = "読書状態。未指定なら WANT_TO_READ。") BookStatus status) {
+    @Schema(description = "読書状態。未指定なら WANT_TO_READ。") BookStatus status,
+    @Schema(
+            description = "表紙の画像の URL。本の検索（GET /api/book-search）の coverUrl をそのまま渡す。",
+            example =
+                "https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1")
+        @Size(max = 500, message = "coverUrl must be at most 500 characters")
+        @Pattern(regexp = CoverUrls.PATTERN, message = "coverUrl must be a Google Books image URL")
+        String coverUrl) {
 
   /**
    * Mirrors the {@code books.status} column default rather than relying on the client to send it.

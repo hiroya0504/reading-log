@@ -16,7 +16,10 @@ describe("coverColor", () => {
 describe("BookCover", () => {
   it("prints the title and author on the cover", () => {
     render(
-      <BookCover book={{ id: 1, title: "リファクタリング", author: "Martin Fowler" }} size="md" />,
+      <BookCover
+        book={{ id: 1, title: "リファクタリング", author: "Martin Fowler", coverUrl: null }}
+        size="md"
+      />,
     );
 
     expect(screen.getByText("リファクタリング")).toBeInTheDocument();
@@ -25,16 +28,58 @@ describe("BookCover", () => {
 
   // The title is always printed beside the cover or named by the link around it.
   it("is hidden from assistive technology so the title is not read twice", () => {
-    render(<BookCover book={{ id: 1, title: "リファクタリング", author: null }} size="md" />);
+    render(
+      <BookCover
+        book={{ id: 1, title: "リファクタリング", author: null, coverUrl: null }}
+        size="md"
+      />,
+    );
 
     expect(isInaccessible(screen.getByText("リファクタリング"))).toBe(true);
   });
 
   it("leaves the author off the small cover, where it would not fit", () => {
     render(
-      <BookCover book={{ id: 1, title: "リファクタリング", author: "Martin Fowler" }} size="sm" />,
+      <BookCover
+        book={{ id: 1, title: "リファクタリング", author: "Martin Fowler", coverUrl: null }}
+        size="sm"
+      />,
     );
 
     expect(screen.queryByText("Martin Fowler")).not.toBeInTheDocument();
+  });
+
+  it("shows the real cover instead of drawing one when the book has it", () => {
+    render(
+      <BookCover
+        book={{
+          id: 1,
+          title: "リファクタリング",
+          author: "Martin Fowler",
+          coverUrl: "https://books.google.com/t",
+        }}
+        size="md"
+      />,
+    );
+
+    // next/image routes the URL through its optimiser, so the book's URL appears encoded in `src`.
+    expect(
+      screen.getByRole("img", { hidden: true, name: "リファクタリング の表紙" }),
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining(encodeURIComponent("https://books.google.com/t")),
+    );
+    expect(screen.queryByText("リファクタリング")).not.toBeInTheDocument();
+  });
+
+  it("hides the real cover from assistive technology too", () => {
+    render(
+      <BookCover
+        book={{ id: 1, title: "t", author: null, coverUrl: "https://books.google.com/t" }}
+        size="sm"
+      />,
+    );
+
+    expect(isInaccessible(screen.getByRole("img", { hidden: true, name: "t の表紙" }))).toBe(true);
   });
 });

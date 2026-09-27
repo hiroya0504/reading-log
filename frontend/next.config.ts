@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // Covers come from the book search. Only Google Books' image hosts, matching what the backend
+  // accepts for `coverUrl` (CoverUrls.java): anything else is refused by both.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "books.google.com" },
+      { protocol: "https", hostname: "books.googleusercontent.com" },
+    ],
+  },
 };
 
 export default nextConfig;

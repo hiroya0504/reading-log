@@ -13,6 +13,7 @@ function book(overrides: Partial<Book> = {}): Book {
     totalPages: 300,
     currentPage: 120,
     status: "READING",
+    coverUrl: null,
     ...overrides,
   };
 }
